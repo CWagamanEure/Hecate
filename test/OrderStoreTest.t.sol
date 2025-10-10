@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {Ownable} from "openzeppelin/contracts/access/Ownable.sol";
+import {Ownable} from "openzeppelin/access/Ownable.sol";
 import {OrderStore} from "../src/OrderStore.sol";
 import {IOrderStore} from "../src/interfaces/IOrderStore.sol";
 import {OrderTypes as OT} from "../src/types/OrderTypes.sol";
@@ -83,8 +83,25 @@ contract OrderStoreTest is Test {
 
         vm.prank(manager);
         vm.expectEmit(address(store));
-        emit OrderStore.commited(cid);
+        emit OrderStore.Commited(cid);
         store.commit(trader, batchId, chash);
+        (
+            address tr,
+            bytes32 b,
+            bytes32 h,
+            bool cancelled,
+            bool revealed,
+            bool executed,
+            bool slashed
+        ) = store.commits(cid);
+
+        assertEq(tr, trader);
+        assertEq(b, batchId);
+        assertEq(h, chash);
+        assertFalse(cancelled);
+        assertFalse(revealed);
+        assertFalse(executed);
+        assertFalse(slashed);
     }
 
     function testCommit_OnlyManager() public {
@@ -93,5 +110,61 @@ contract OrderStoreTest is Test {
 
         vm.expectRevert(OrderStore.OrderStore__NotManager.selector);
         store.commit(trader, batchId, chash);
+    }
+
+    function testCommit_OverwriteSameIdAllowed_LastWriteWins() public {
+        bytes32 batchId = keccak256("b3");
+        bytes32 chash1 = keccak256("c3a");
+        bytes32 chash2 = keccak256("c3b");
+
+        vm.prank(manager);
+        store.commit(trader, batchId, chash1);
+
+        bytes32 cid = OHL._commitId(trader, batchId, chash1);
+
+        vm.prank(manager);
+        store.commit(trader, batchId, chash1);
+
+        (, , bytes32 h, , bool revealed, , ) = store.commits(cid);
+        assertEq(h, chash1);
+        assertFalse(revealed);
+    }
+
+    function testReveal_OnlyManagerGuard() public {
+        bytes32 batchId = keccak256("b3");
+        bytes32 chash = keccak256("c3a");
+        OT.Order memory o = _dummyOrder(batchId);
+        bytes32 orderHash = OHL._orderStructHash(o, trader);
+
+        PT.Permit memory p = _dummyPermit(batchId, orderHash);
+
+        bytes32 cid = OHL._commitId(trader, batchId, chash);
+        vm.prank(manager);
+        store.commit(trader, batchId, chash);
+
+        vm.prank(stranger);
+        vm.expectRevert(OrderStore.OrderStore__NotManager.selector);
+        store.reveal(cid, o, p);
+    }
+
+    function testReveal_SetsRevealedAndEmits() public {
+        bytes32 batchId = keccak256("b3");
+        bytes32 chash = keccak256("c3a");
+        bytes32 cid = OHL._commitId(trader, batchId, chash);
+        OT.Order memory o = _dummyOrder(batchId);
+        bytes32 orderHash = OHL._orderStructHash(o, trader);
+
+        PT.Permit memory p = _dummyPermit(batchId, orderHash);
+
+        vm.prank(manager);
+        store.commit(trader, batchId, chash);
+
+        vm.prank(manager);
+        vm.expectEmit(address(store));
+        emit OrderStore.Revealed(cid);
+        store.reveal(cid, o, p);
+
+        (, , , , bool revealed, , ) = store.commits(cid);
+        assertTrue(revealed, "revealed should be true");
     }
 }

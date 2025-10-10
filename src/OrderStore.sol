@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Ownable} from "openzeppelin/contracts/access/Ownable.sol";
+import {Ownable} from "openzeppelin/access/Ownable.sol";
 import {OrderTypes as OT} from "./types/OrderTypes.sol";
 import {PermitTypes as PT} from "./types/PermitTypes.sol";
 import {OrderHashLib as OHL} from "./libraries/OrderHashLib.sol";
@@ -17,30 +17,38 @@ contract OrderStore is Ownable {
         bool executed;
         bool slashed;
     }
-    //----------variables--------
-
-    address public manager;
-
-    //commitId to Commitment
-    mapping(bytes32 => Commitment) public commits;
-    //commitId to RevealedOrder
-    mapping(bytes32 => RevealedOrder) public reveals;
 
     struct RevealedOrder {
         bytes32 commitId;
         OT.Order order;
         PT.Permit permit;
     }
+    //----------variables--------
+
+    address public manager;
+    uint64 public epoch;
+    OT.BatchId public currentBatchId;
+    bool public batchFinalized;
+
+    //commitId to Commitment
+    mapping(bytes32 => Commitment) public commits;
+    //commitId to RevealedOrder
+    mapping(bytes32 => RevealedOrder) public reveals;
 
     //---------Events------------------
     event ManagerUpdated(address indexed newManager);
-
-    event commited(bytes32 commitId);
-    event revealed(bytes32 commitId);
+    event Commited(bytes32 commitId);
+    event Revealed(bytes32 commitId);
+    event BatchStarted(
+        bytes32 indexed batchId,
+        uint64 epoch,
+        uint256 timestamp
+    );
 
     //---------Errors--------------------
     error OrderStore__NotManager();
     error OrderStore__AddressZeroUsed();
+    error OrderStore__PrevBatchNotFinalized();
 
     //---------Modifiers--------------------
     modifier addressZero(address value) {
@@ -61,6 +69,25 @@ contract OrderStore is Ownable {
     }
 
     //---------Functions--------------------
+    function startBatch() external onlyManager returns (bytes32) {
+        if (batchFinalized == true && epoch != 0)
+            revert OrderStore__PrevBatchNotFinalized();
+        epoch += 1;
+        OT.BatchId newBatchId = OHL._computeBatchId(
+            manager,
+            epoch,
+            block.chainid
+        );
+        currentBatchId = newBatchId;
+        batchFinalized = false;
+        emit BatchStarted(
+            OT.BatchId.unwrap(currentBatchId),
+            epoch,
+            block.timestamp
+        );
+        return OT.BatchId.unwrap(currentBatchId);
+    }
+
     function commit(
         address _trader,
         bytes32 _batchId,
@@ -76,7 +103,7 @@ contract OrderStore is Ownable {
             slashed: false,
             cancelled: false
         });
-        emit commited(commitId);
+        emit Commited(commitId);
     }
 
     function reveal(
@@ -92,7 +119,7 @@ contract OrderStore is Ownable {
             permit: p
         });
 
-        emit revealed(commitId);
+        emit Revealed(commitId);
     }
 
     function getCommited(

@@ -63,6 +63,17 @@ library OrderHashLib {
             );
     }
 
+    function _computeBatchId(
+        address verifyingContract,
+        uint64 round,
+        uint256 chainId
+    ) internal pure returns (OT.BatchId) {
+        return
+            OT.BatchId.wrap(
+                keccak256(abi.encode(chainId, verifyingContract, round))
+            );
+    }
+
     function _eip712Digest(
         OT.Order memory o,
         address trader,
