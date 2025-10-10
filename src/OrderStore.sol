@@ -39,11 +39,7 @@ contract OrderStore is Ownable {
     event ManagerUpdated(address indexed newManager);
     event Commited(bytes32 commitId);
     event Revealed(bytes32 commitId);
-    event BatchStarted(
-        bytes32 indexed batchId,
-        uint64 epoch,
-        uint256 timestamp
-    );
+    event BatchStarted(bytes32 indexed batchId, uint64 epoch, uint256 timestamp);
 
     //---------Errors--------------------
     error OrderStore__NotManager();
@@ -70,29 +66,18 @@ contract OrderStore is Ownable {
 
     //---------Functions--------------------
     function startBatch() external onlyManager returns (bytes32) {
-        if (batchFinalized == true && epoch != 0)
+        if (batchFinalized == true && epoch != 0) {
             revert OrderStore__PrevBatchNotFinalized();
+        }
         epoch += 1;
-        OT.BatchId newBatchId = OHL._computeBatchId(
-            manager,
-            epoch,
-            block.chainid
-        );
+        OT.BatchId newBatchId = OHL._computeBatchId(manager, epoch, block.chainid);
         currentBatchId = newBatchId;
         batchFinalized = false;
-        emit BatchStarted(
-            OT.BatchId.unwrap(currentBatchId),
-            epoch,
-            block.timestamp
-        );
+        emit BatchStarted(OT.BatchId.unwrap(currentBatchId), epoch, block.timestamp);
         return OT.BatchId.unwrap(currentBatchId);
     }
 
-    function commit(
-        address _trader,
-        bytes32 _batchId,
-        bytes32 _commitmentHash
-    ) external onlyManager {
+    function commit(address _trader, bytes32 _batchId, bytes32 _commitmentHash) external onlyManager {
         bytes32 commitId = OHL._commitId(_trader, _batchId, _commitmentHash);
         commits[commitId] = Commitment({
             trader: _trader,
@@ -106,31 +91,19 @@ contract OrderStore is Ownable {
         emit Commited(commitId);
     }
 
-    function reveal(
-        bytes32 commitId,
-        OT.Order calldata o,
-        PT.Permit calldata p
-    ) external onlyManager {
+    function reveal(bytes32 commitId, OT.Order calldata o, PT.Permit calldata p) external onlyManager {
         Commitment storage c = commits[commitId];
         c.revealed = true;
-        reveals[commitId] = RevealedOrder({
-            commitId: commitId,
-            order: o,
-            permit: p
-        });
+        reveals[commitId] = RevealedOrder({commitId: commitId, order: o, permit: p});
 
         emit Revealed(commitId);
     }
 
-    function getCommited(
-        bytes32 commitId
-    ) public view returns (Commitment memory) {
+    function getCommited(bytes32 commitId) public view returns (Commitment memory) {
         return commits[commitId];
     }
 
-    function changeManager(
-        address newManager
-    ) public onlyOwner addressZero(newManager) {
+    function changeManager(address newManager) public onlyOwner addressZero(newManager) {
         manager = newManager;
         emit ManagerUpdated(newManager);
     }

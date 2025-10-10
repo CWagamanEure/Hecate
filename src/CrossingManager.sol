@@ -29,11 +29,7 @@ contract CrossingManager {
         STORE = IOrderStore(store_);
     }
 
-    function commit(
-        bytes32 commitmentHash,
-        bytes32 batchId,
-        PT.Permit calldata bondPermit
-    ) external {
+    function commit(bytes32 commitmentHash, bytes32 batchId, PT.Permit calldata bondPermit) external {
         STORE.commit(msg.sender, batchId, commitmentHash);
     }
 
@@ -47,11 +43,7 @@ contract CrossingManager {
         return _CACHED_DOMAIN_SEPARATOR;
     }
 
-    function _isValidSig(
-        bytes32 digest,
-        bytes calldata sig,
-        address expected
-    ) internal pure returns (bool) {
+    function _isValidSig(bytes32 digest, bytes calldata sig, address expected) internal pure returns (bool) {
         return ECDSA.recover(digest, sig) == expected;
     }
 }

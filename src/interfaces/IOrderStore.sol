@@ -10,16 +10,10 @@ interface IOrderStore {
 
     function setManager(address m) external;
 
-    function commit(
-        address trader,
-        bytes32 batchId,
-        bytes32 commitmentHash
-    ) external returns (bytes32 commitId);
+    function commit(address trader, bytes32 batchId, bytes32 commitmentHash) external returns (bytes32 commitId);
 
     //Mapping mirros
-    function commits(
-        bytes32 commitId
-    )
+    function commits(bytes32 commitId)
         external
         view
         returns (
@@ -32,9 +26,7 @@ interface IOrderStore {
             bool cancelled
         );
 
-    function reveals(
-        bytes32 commitId
-    )
+    function reveals(bytes32 commitId)
         external
         view
         returns (
