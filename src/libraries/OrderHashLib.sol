@@ -35,6 +35,14 @@ library OrderHashLib {
             );
     }
 
+    function _commitId(
+        address trader,
+        bytes32 batchId,
+        bytes32 commitmentHash
+    ) external pure returns (bytes32) {
+        keccak256(abi.encode(trader, batchId, commitmentHash));
+    }
+
     function _orderStructHash(
         OT.Order memory o,
         address trader

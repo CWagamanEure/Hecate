@@ -1,0 +1,97 @@
+//SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {Test} from "forge-std/Test.sol";
+import {Ownable} from "openzeppelin/contracts/access/Ownable.sol";
+import {OrderStore} from "../src/OrderStore.sol";
+import {IOrderStore} from "../src/interfaces/IOrderStore.sol";
+import {OrderTypes as OT} from "../src/types/OrderTypes.sol";
+import {PermitTypes as PT} from "../src/types/PermitTypes.sol";
+import {OrderHashLib as OHL} from "../src/libraries/OrderHashLib.sol";
+
+contract OrderStoreTest is Test {
+    OrderStore store;
+    address owner = makeAddr("owner");
+    address manager = makeAddr("manager");
+    address trader = makeAddr("trader");
+    address stranger = makeAddr("stranger");
+
+    function _dummyOrder(
+        bytes32 batchId
+    ) internal view returns (OT.Order memory) {
+        return
+            OT.Order({
+                base: address(0xB01),
+                quote: address(0xB02),
+                side: OT.Side.BUY,
+                size: 1e18,
+                bandBps: 100,
+                batchId: OT.BatchId.wrap(batchId),
+                salt: keccak256("salt-1"),
+                trader: trader
+            });
+    }
+
+    function _dummyPermit(
+        bytes32 orderHash,
+        bytes32 batchId
+    ) internal view returns (PT.Permit memory) {
+        return
+            PT.Permit({
+                kind: PT.PermitKind.PERMIT2,
+                token: address(0xB01),
+                maxAmount: 1e18,
+                deadline: block.timestamp + 7 days,
+                signature: new bytes(65),
+                nonce: 0,
+                orderHash: orderHash,
+                batchId: batchId
+            });
+    }
+
+    function setUp() public {
+        vm.prank(owner);
+        store = new OrderStore(manager);
+    }
+
+    function testConstructor_SetsOwnerAndManager() public {
+        assertEq(store.owner(), owner);
+        assertEq(store.manager(), manager);
+    }
+
+    function testConstructor_RevertsWhenAddressZero() public {
+        vm.expectRevert();
+        new OrderStore(address(0));
+    }
+
+    function testChangeManager_OnlyOwner() public {
+        address newManager = makeAddr("newManager");
+        vm.expectRevert();
+        store.changeManager(newManager);
+    }
+
+    function testChangeManager_RevertWhenZero() public {
+        vm.expectRevert(OrderStore.OrderStore__AddressZeroUsed.selector);
+        vm.prank(owner);
+        store.changeManager(address(0));
+    }
+
+    function testCommit_StoresAndEmits() public {
+        bytes32 batchId = keccak256("b2");
+        bytes32 chash = keccak256("c2");
+        bytes32 cid = OHL._commitId(trader, batchId, chash);
+
+        vm.prank(manager);
+        vm.expectEmit(address(store));
+        emit OrderStore.commited(cid);
+        store.commit(trader, batchId, chash);
+    }
+
+    function testCommit_OnlyManager() public {
+        bytes32 batchId = keccak256("batch-1");
+        bytes32 chash = keccak256("commitment");
+
+        vm.expectRevert(OrderStore.OrderStore__NotManager.selector);
+        store.commit(trader, batchId, chash);
+    }
+}

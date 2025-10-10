@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Ownable} from "openzeppelin/contracts/access/Ownable.sol";
 import {OrderTypes as OT} from "./types/OrderTypes.sol";
 import {PermitTypes as PT} from "./types/PermitTypes.sol";
+import {OrderHashLib as OHL} from "./libraries/OrderHashLib.sol";
 
 contract OrderStore is Ownable {
     //-------Structs---------------
@@ -18,28 +19,27 @@ contract OrderStore is Ownable {
     }
     //----------variables--------
 
-    address private immutable OWNER;
     address public manager;
 
+    //commitId to Commitment
     mapping(bytes32 => Commitment) public commits;
+    //commitId to RevealedOrder
     mapping(bytes32 => RevealedOrder) public reveals;
 
     struct RevealedOrder {
         bytes32 commitId;
-        OT.Order o;
-        PT.Permit p;
+        OT.Order order;
+        PT.Permit permit;
     }
 
     //---------Events------------------
-    event ManagerUpdated(
-        address indexed oldManager,
-        address indexed newManager
-    );
-    event commited(Commitment);
+    event ManagerUpdated(address indexed newManager);
+
+    event commited(bytes32 commitId);
+    event revealed(bytes32 commitId);
 
     //---------Errors--------------------
     error OrderStore__NotManager();
-    error OrderStore__NotOwner();
     error OrderStore__AddressZeroUsed();
 
     //---------Modifiers--------------------
@@ -54,11 +54,10 @@ contract OrderStore is Ownable {
     }
 
     //-----------Constructor------------
-    constructor(address _owner, address _manager) Ownable(_owner) {
-        if (_owner == address(0)) revert OrderStore__AddressZeroUsed();
-        OWNER = msg.sender;
+    constructor(address _manager) Ownable(msg.sender) {
+        if (_manager == address(0)) revert OrderStore__AddressZeroUsed();
         manager = _manager;
-        emit ManagerUpdated(address(0), _manager);
+        emit ManagerUpdated(_manager);
     }
 
     //---------Functions--------------------
@@ -67,7 +66,8 @@ contract OrderStore is Ownable {
         bytes32 _batchId,
         bytes32 _commitmentHash
     ) external onlyManager {
-        commits[_batchId] = Commitment({
+        bytes32 commitId = OHL._commitId(_trader, _batchId, _commitmentHash);
+        commits[commitId] = Commitment({
             trader: _trader,
             batchId: _batchId,
             commitmentHash: _commitmentHash,
@@ -76,10 +76,35 @@ contract OrderStore is Ownable {
             slashed: false,
             cancelled: false
         });
-        emit commited(commits[_batchId]); 
+        emit commited(commitId);
     }
 
-    function getCommited() public view returns(commited){
-        return 
+    function reveal(
+        bytes32 commitId,
+        OT.Order calldata o,
+        PT.Permit calldata p
+    ) external onlyManager {
+        Commitment storage c = commits[commitId];
+        c.revealed = true;
+        reveals[commitId] = RevealedOrder({
+            commitId: commitId,
+            order: o,
+            permit: p
+        });
+
+        emit revealed(commitId);
+    }
+
+    function getCommited(
+        bytes32 commitId
+    ) public view returns (Commitment memory) {
+        return commits[commitId];
+    }
+
+    function changeManager(
+        address newManager
+    ) public onlyOwner addressZero(newManager) {
+        manager = newManager;
+        emit ManagerUpdated(newManager);
     }
 }
