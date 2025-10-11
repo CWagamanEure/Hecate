@@ -11,7 +11,9 @@ library PermitTypes {
 
     struct Permit {
         PermitKind kind;
+        address owner;
         address token;
+        address spender;
         uint256 maxAmount;
         uint256 deadline;
         bytes signature;

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {OrderTypes as OT} from "../types/OrderTypes.sol";
+import {PermitTypes as PT} from "../types/PermitTypes.sol";
 
 interface IOrderStore {
     function owner() external view returns (address);
@@ -10,10 +11,16 @@ interface IOrderStore {
 
     function setManager(address m) external;
 
-    function commit(address trader, bytes32 batchId, bytes32 commitmentHash) external returns (bytes32 commitId);
+    function commit(address trader, OT.BatchId batchId, bytes32 commitmentHash)
+        external
+        returns (OT.CommitId commitId);
+
+    function reveal(OT.CommitId commitId, OT.Order calldata order, PT.Permit calldata permit) external;
+
+    function cancelCommit(address trader, OT.CommitId) external;
 
     //Mapping mirros
-    function commits(bytes32 commitId)
+    function commits(OT.CommitId commitId)
         external
         view
         returns (

@@ -14,7 +14,7 @@ library OrderTypes {
     enum Phase {
         COMMIT,
         REVEAL,
-        CLEARREADY
+        CLEAR
     }
 
     struct Pair {
@@ -41,6 +41,7 @@ library OrderTypes {
     }
 
     struct BatchConfig {
+        bool exists;
         uint64 genesisTs;
         uint256 batchLength;
         uint256 commitSecs;

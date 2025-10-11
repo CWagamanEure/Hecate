@@ -7,38 +7,43 @@ import {OrderTypes as OT} from "./types/OrderTypes.sol";
 import {OrderStore} from "./OrderStore.sol";
 import {IOrderStore} from "./interfaces/IOrderStore.sol";
 import {OrderHashLib as OHL} from "./libraries/OrderHashLib.sol";
+import {Ownable} from "openzeppelin/access/Ownable.sol";
 
-contract CrossingManager {
-    string private s_name;
+contract CrossingManager is Ownable {
+    string public constant NAME = "HECATEX";
+    bytes32 public constant VENUE_ID = keccak256(abi.encode(NAME));
     string private s_version;
     bytes32 private immutable _CACHED_DOMAIN_SEPARATOR =
-        OHL.makeDomainSeparator(s_name, s_version, address(this), block.chainid);
+        OHL.makeDomainSeparator(NAME, s_version, address(this), block.chainid);
 
     IOrderStore public immutable STORE;
 
     mapping(OT.PairId => OT.BatchConfig) public cfg;
 
     //-----------Events--------------------
+    event Commited(bytes32);
 
     //-----------Errors-----------------
     error CrossingManager__BatchNotConfigured();
+    error CrossingManager__NotCommitPhase();
+    error CrossingManager__NotRevealPhase();
+    error CrossingManager__NotClearPhase();
+    error CrossingManager__NonexistentPairId();
+    error CrossingManager__PairAlreadyExists();
 
-    constructor(
-        string memory _name,
-        string memory _version,
-        address store_,
-        address bonds_,
-        address vault_,
-        address pg_
-    ) {
-        s_name = _name;
+    //--------Modifiers-----------------------
+
+    //--------------Constructor-----------------------
+    constructor(string memory _version, address store_, address bonds_, address vault_, address pg_)
+        Ownable(msg.sender)
+    {
         s_version = _version;
 
         STORE = IOrderStore(store_);
     }
 
     //---------time math-----------------------
-    function currentIndex(OT.PairId pairId) public view returns (uint64) {
+    function currentIndex(OT.PairId pairId) public view returns (uint64 idx) {
         OT.BatchConfig storage c = cfg[pairId];
         if (c.batchLength == 0) revert CrossingManager__BatchNotConfigured();
         uint256 since = block.timestamp - c.genesisTs;
@@ -61,28 +66,58 @@ contract CrossingManager {
         (uint256 tStart, uint256 tCommitEnd, uint256 tClear) = batchTimes(pairId, idx);
         if (block.timestamp < tCommitEnd) return OT.Phase.COMMIT;
         if (block.timestamp < tClear) return OT.Phase.REVEAL;
-        return OT.Phase.CLEARREADY;
+        return OT.Phase.CLEAR;
     }
 
     //------------helpers----------------
     function getCurrentBatch(OT.PairId pairId) public view returns (OT.BatchId bid, uint64 idx, OT.Phase p) {
         idx = currentIndex(pairId);
         p = phaseFor(pairId, idx);
-        bid = OHL.batchIdOf(_CACHED_DOMAIN_SEPARATOR, pairId, idx);
+        bid = OHL.batchIdOf(VENUE_ID, block.chainid, pairId, idx);
     }
 
-    function commit(bytes32 commitmentHash, bytes32 batchId, PT.Permit calldata bondPermit) external {
-        STORE.commit(msg.sender, batchId, commitmentHash);
+    //----------Main Functionality-----------------------
+    function commit(OT.PairId pairId, bytes32 commitmentHash, PT.Permit calldata bondPermit)
+        external
+        returns (OT.CommitId)
+    {
+        (OT.BatchId bid,, OT.Phase phase) = getCurrentBatch(pairId);
+        if (phase != OT.Phase.COMMIT) revert CrossingManager__NotCommitPhase();
+        //COLLECT BOND
+
+        address trader = bondPermit.spender;
+        OT.CommitId commitId = STORE.commit(trader, bid, commitmentHash);
+        emit Commited(OT.CommitId.unwrap(commitId));
+        return commitId;
     }
 
-    function reveal(OT.Order calldata o, PT.Permit calldata p) internal {}
+    function reveal(OT.CommitId cid, OT.PairId pairId, OT.Order calldata o, PT.Permit calldata p) external {
+        (OT.BatchId bid,, OT.Phase phase) = getCurrentBatch(pairId);
+        if (phase != OT.Phase.REVEAL) revert CrossingManager__NotRevealPhase();
 
-    function clear(bytes32 batchId) public {}
+        STORE.reveal(cid, o, p);
+    }
 
-    function cancelCommit(bytes32 batchId) public {}
+    function clear(OT.PairId pairId) external {
+        (OT.BatchId bid,, OT.Phase phase) = getCurrentBatch(pairId);
+        if (phase != OT.Phase.CLEAR) revert CrossingManager__NotClearPhase();
+    }
+
+    function cancelCommit(OT.PairId pairId, OT.CommitId commitId) public {
+        (OT.BatchId bid,, OT.Phase phase) = getCurrentBatch(pairId);
+        if (phase != OT.Phase.COMMIT) revert CrossingManager__NotCommitPhase();
+        STORE.cancelCommit(msg.sender, commitId);
+    }
 
     function domainSeparator() public view returns (bytes32) {
         return _CACHED_DOMAIN_SEPARATOR;
+    }
+
+    function listPair(address base, address quote, OT.BatchConfig memory batchConfig) public onlyOwner {
+        OT.PairId pairId = OHL.pairIdOf(OT.Pair(base, quote));
+        if (cfg[pairId].exists) revert CrossingManager__PairAlreadyExists();
+
+        cfg[pairId] = batchConfig;
     }
 
     function _isValidSig(bytes32 digest, bytes calldata sig, address expected) internal pure returns (bool) {

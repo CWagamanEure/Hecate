@@ -61,15 +61,19 @@ library OrderHashLib {
     /**
      * Deterministic pair identifier used to look up per-pair config
      */
-    function pairIdOf(OT.Pair memory p) public pure returns (OT.PairId) {
+    function pairIdOf(OT.Pair memory p) external pure returns (OT.PairId) {
         return OT.PairId.wrap(keccak256(abi.encode(p.base, p.quote)));
     }
 
     /**
      * Deterministic pair identifier for a (pairId, index) on the specific chain and venue
      */
-    function batchIdOf(bytes32 domainSeparator, OT.PairId pairId, uint64 index) internal view returns (OT.BatchId) {
-        return OT.BatchId.wrap(keccak256(abi.encode(domainSeparator, OT.PairId.unwrap(pairId), index)));
+    function batchIdOf(bytes32 venueId, uint256 chainId, OT.PairId pairId, uint64 index)
+        external
+        pure
+        returns (OT.BatchId)
+    {
+        return OT.BatchId.wrap(keccak256(abi.encode(venueId, chainId, OT.PairId.unwrap(pairId), index)));
     }
 
     /**

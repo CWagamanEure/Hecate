@@ -42,6 +42,8 @@ contract OrderStore is Ownable {
     error OrderStore__AddressZeroUsed();
     error OrderStore__PrevBatchNotFinalized();
     error OrderStore__BatchAlreadyFinalized();
+    error OrderStore__RestrictedCommitment();
+    error OrderStore__CallerNotTrader();
 
     //---------Modifiers--------------------
     modifier addressZero(address value) {
@@ -62,7 +64,11 @@ contract OrderStore is Ownable {
     }
 
     //---------Functions--------------------
-    function commit(address _trader, OT.BatchId _batchId, bytes32 _commitmentHash) external onlyManager {
+    function commit(address _trader, OT.BatchId _batchId, bytes32 _commitmentHash)
+        external
+        onlyManager
+        returns (OT.CommitId)
+    {
         OT.CommitId commitId = OHL.commitIdOf(_trader, _batchId, _commitmentHash);
         commits[commitId] = Commitment({
             trader: _trader,
@@ -74,14 +80,25 @@ contract OrderStore is Ownable {
             cancelled: false
         });
         emit Commited(commitId);
+        return commitId;
     }
 
     function reveal(OT.CommitId commitId, OT.Order calldata o, PT.Permit calldata p) external onlyManager {
         Commitment storage c = commits[commitId];
+        if (c.revealed == true || c.executed == true || c.slashed == true || c.cancelled == true) {
+            revert OrderStore__RestrictedCommitment();
+        }
         c.revealed = true;
         reveals[commitId] = RevealedOrder({commitId: commitId, order: o, permit: p});
 
         emit Revealed(commitId);
+    }
+
+    function cancelCommit(address trader, OT.CommitId commitId) external onlyManager returns (bool) {
+        Commitment memory commitment = commits[commitId];
+        if (commitment.trader != trader) revert OrderStore__CallerNotTrader();
+        commitment.cancelled = true;
+        return true;
     }
 
     function getCommited(OT.CommitId commitId) public view returns (Commitment memory) {

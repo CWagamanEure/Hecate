@@ -31,7 +31,9 @@ contract OrderStoreTest is Test {
     function _dummyPermit(OT.BatchId batchId, bytes32 orderHash) internal view returns (PT.Permit memory) {
         return PT.Permit({
             kind: PT.PermitKind.PERMIT2,
+            owner: trader,
             token: address(0xB01),
+            spender: trader,
             maxAmount: 1e18,
             deadline: block.timestamp + 7 days,
             signature: new bytes(65),
