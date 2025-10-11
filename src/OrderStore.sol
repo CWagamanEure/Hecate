@@ -10,7 +10,7 @@ contract OrderStore is Ownable {
     //-------Structs---------------
     struct Commitment {
         address trader;
-        bytes32 batchId;
+        OT.BatchId batchId;
         bytes32 commitmentHash;
         bool cancelled;
         bool revealed;
@@ -19,32 +19,29 @@ contract OrderStore is Ownable {
     }
 
     struct RevealedOrder {
-        bytes32 commitId;
+        OT.CommitId commitId;
         OT.Order order;
         PT.Permit permit;
     }
     //----------variables--------
 
     address public manager;
-    uint64 public epoch;
-    OT.BatchId public currentBatchId;
-    bool public batchFinalized;
 
     //commitId to Commitment
-    mapping(bytes32 => Commitment) public commits;
+    mapping(OT.CommitId => Commitment) public commits;
     //commitId to RevealedOrder
-    mapping(bytes32 => RevealedOrder) public reveals;
+    mapping(OT.CommitId => RevealedOrder) public reveals;
 
     //---------Events------------------
     event ManagerUpdated(address indexed newManager);
-    event Commited(bytes32 commitId);
-    event Revealed(bytes32 commitId);
-    event BatchStarted(bytes32 indexed batchId, uint64 epoch, uint256 timestamp);
+    event Commited(OT.CommitId commitId);
+    event Revealed(OT.CommitId commitId);
 
     //---------Errors--------------------
     error OrderStore__NotManager();
     error OrderStore__AddressZeroUsed();
     error OrderStore__PrevBatchNotFinalized();
+    error OrderStore__BatchAlreadyFinalized();
 
     //---------Modifiers--------------------
     modifier addressZero(address value) {
@@ -65,20 +62,16 @@ contract OrderStore is Ownable {
     }
 
     //---------Functions--------------------
-    function startBatch() external onlyManager returns (bytes32) {
-        if (batchFinalized == true && epoch != 0) {
-            revert OrderStore__PrevBatchNotFinalized();
-        }
-        epoch += 1;
-        OT.BatchId newBatchId = OHL._computeBatchId(manager, epoch, block.chainid);
-        currentBatchId = newBatchId;
-        batchFinalized = false;
-        emit BatchStarted(OT.BatchId.unwrap(currentBatchId), epoch, block.timestamp);
-        return OT.BatchId.unwrap(currentBatchId);
-    }
-
-    function commit(address _trader, bytes32 _batchId, bytes32 _commitmentHash) external onlyManager {
-        bytes32 commitId = OHL._commitId(_trader, _batchId, _commitmentHash);
+    function commit(
+        address _trader,
+        OT.BatchId _batchId,
+        bytes32 _commitmentHash
+    ) external onlyManager {
+        OT.CommitId commitId = OHL.commitIdOf(
+            _trader,
+            _batchId,
+            _commitmentHash
+        );
         commits[commitId] = Commitment({
             trader: _trader,
             batchId: _batchId,
@@ -91,19 +84,31 @@ contract OrderStore is Ownable {
         emit Commited(commitId);
     }
 
-    function reveal(bytes32 commitId, OT.Order calldata o, PT.Permit calldata p) external onlyManager {
+    function reveal(
+        OT.CommitId commitId,
+        OT.Order calldata o,
+        PT.Permit calldata p
+    ) external onlyManager {
         Commitment storage c = commits[commitId];
         c.revealed = true;
-        reveals[commitId] = RevealedOrder({commitId: commitId, order: o, permit: p});
+        reveals[commitId] = RevealedOrder({
+            commitId: commitId,
+            order: o,
+            permit: p
+        });
 
         emit Revealed(commitId);
     }
 
-    function getCommited(bytes32 commitId) public view returns (Commitment memory) {
+    function getCommited(
+        OT.CommitId commitId
+    ) public view returns (Commitment memory) {
         return commits[commitId];
     }
 
-    function changeManager(address newManager) public onlyOwner addressZero(newManager) {
+    function changeManager(
+        address newManager
+    ) public onlyOwner addressZero(newManager) {
         manager = newManager;
         emit ManagerUpdated(newManager);
     }

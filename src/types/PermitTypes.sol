@@ -1,6 +1,8 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {OrderTypes as OT} from "./OrderTypes.sol";
+
 library PermitTypes {
     enum PermitKind {
         EIP2612,
@@ -15,6 +17,6 @@ library PermitTypes {
         bytes signature;
         bytes32 nonce;
         bytes32 orderHash;
-        bytes32 batchId;
+        OT.BatchId batchId;
     }
 }
