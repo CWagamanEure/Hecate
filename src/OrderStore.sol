@@ -62,16 +62,8 @@ contract OrderStore is Ownable {
     }
 
     //---------Functions--------------------
-    function commit(
-        address _trader,
-        OT.BatchId _batchId,
-        bytes32 _commitmentHash
-    ) external onlyManager {
-        OT.CommitId commitId = OHL.commitIdOf(
-            _trader,
-            _batchId,
-            _commitmentHash
-        );
+    function commit(address _trader, OT.BatchId _batchId, bytes32 _commitmentHash) external onlyManager {
+        OT.CommitId commitId = OHL.commitIdOf(_trader, _batchId, _commitmentHash);
         commits[commitId] = Commitment({
             trader: _trader,
             batchId: _batchId,
@@ -84,31 +76,19 @@ contract OrderStore is Ownable {
         emit Commited(commitId);
     }
 
-    function reveal(
-        OT.CommitId commitId,
-        OT.Order calldata o,
-        PT.Permit calldata p
-    ) external onlyManager {
+    function reveal(OT.CommitId commitId, OT.Order calldata o, PT.Permit calldata p) external onlyManager {
         Commitment storage c = commits[commitId];
         c.revealed = true;
-        reveals[commitId] = RevealedOrder({
-            commitId: commitId,
-            order: o,
-            permit: p
-        });
+        reveals[commitId] = RevealedOrder({commitId: commitId, order: o, permit: p});
 
         emit Revealed(commitId);
     }
 
-    function getCommited(
-        OT.CommitId commitId
-    ) public view returns (Commitment memory) {
+    function getCommited(OT.CommitId commitId) public view returns (Commitment memory) {
         return commits[commitId];
     }
 
-    function changeManager(
-        address newManager
-    ) public onlyOwner addressZero(newManager) {
+    function changeManager(address newManager) public onlyOwner addressZero(newManager) {
         manager = newManager;
         emit ManagerUpdated(newManager);
     }

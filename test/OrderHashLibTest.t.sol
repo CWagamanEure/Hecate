@@ -6,40 +6,28 @@ import {OrderTypes as OT} from "../src/types/OrderTypes.sol";
 import "../src/libraries/OrderHashLib.sol";
 
 contract Exposed {
-    function makeCommitmentHash(
-        OT.Order memory o,
-        address trader
-    ) external pure returns (bytes32) {
+    function makeCommitmentHash(OT.Order memory o, address trader) external pure returns (bytes32) {
         return OrderHashLib.makeCommitmentHash(o, trader);
     }
 
-    function makeOrderStructHash(
-        OT.Order memory o
-    ) external pure returns (bytes32) {
+    function makeOrderStructHash(OT.Order memory o) external pure returns (bytes32) {
         return OrderHashLib.makeOrderStructHash(o);
     }
 
-    function makeEip712Digest(
-        OT.Order memory o,
-        address trader,
-        bytes32 domainSeparator
-    ) external pure returns (bytes32) {
+    function makeEip712Digest(OT.Order memory o, address trader, bytes32 domainSeparator)
+        external
+        pure
+        returns (bytes32)
+    {
         return OrderHashLib.makeEip712Digest(o, trader, domainSeparator);
     }
 
-    function makeDomainSeparator(
-        string memory name,
-        string memory version,
-        address verifyingContract,
-        uint256 chainId
-    ) external pure returns (bytes32) {
-        return
-            OrderHashLib.makeDomainSeparator(
-                name,
-                version,
-                verifyingContract,
-                chainId
-            );
+    function makeDomainSeparator(string memory name, string memory version, address verifyingContract, uint256 chainId)
+        external
+        pure
+        returns (bytes32)
+    {
+        return OrderHashLib.makeDomainSeparator(name, version, verifyingContract, chainId);
     }
 }
 
@@ -87,42 +75,21 @@ contract OrderHashLibTest is Test {
                 order.salt
             )
         );
-        assertEq(
-            structHash,
-            recomputed,
-            "Struct hash should match manual encoding"
-        );
+        assertEq(structHash, recomputed, "Struct hash should match manual encoding");
     }
 
     function testEIP712DigestComposition() public view {
         bytes32 dom = keccak256("domain");
         bytes32 digest = exposed.makeEip712Digest(order, trader, dom);
-        bytes32 expected = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                dom,
-                exposed.makeOrderStructHash(order)
-            )
-        );
-        assertEq(
-            digest,
-            expected,
-            "EIP-712 digest must contain domain and strict hash"
-        );
+        bytes32 expected = keccak256(abi.encodePacked("\x19\x01", dom, exposed.makeOrderStructHash(order)));
+        assertEq(digest, expected, "EIP-712 digest must contain domain and strict hash");
     }
 
     function testDomainSeparatorMatchesEIP712Spec() public {
-        bytes32 sep = exposed.makeDomainSeparator(
-            "CrossNet",
-            "1",
-            address(this),
-            31337
-        );
+        bytes32 sep = exposed.makeDomainSeparator("CrossNet", "1", address(this), 31337);
         bytes32 expected = keccak256(
             abi.encode(
-                keccak256(
-                    "EIP712Domain(string name, string version, uint256 chainId, address verifyingContract)"
-                ),
+                keccak256("EIP712Domain(string name, string version, uint256 chainId, address verifyingContract)"),
                 keccak256(bytes("CrossNet")),
                 keccak256(bytes("1")),
                 uint256(31337),

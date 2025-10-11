@@ -16,36 +16,29 @@ contract OrderStoreTest is Test {
     address trader = makeAddr("trader");
     address stranger = makeAddr("stranger");
 
-    function _dummyOrder(
-        OT.BatchId batchId
-    ) internal view returns (OT.Order memory) {
-        return
-            OT.Order({
-                base: address(0xB01),
-                quote: address(0xB02),
-                side: OT.Side.BUY,
-                sizeBase: 1e18,
-                bandBps: 100,
-                batchId: batchId,
-                salt: keccak256("salt-1")
-            });
+    function _dummyOrder(OT.BatchId batchId) internal view returns (OT.Order memory) {
+        return OT.Order({
+            base: address(0xB01),
+            quote: address(0xB02),
+            side: OT.Side.BUY,
+            sizeBase: 1e18,
+            bandBps: 100,
+            batchId: batchId,
+            salt: keccak256("salt-1")
+        });
     }
 
-    function _dummyPermit(
-        OT.BatchId batchId,
-        bytes32 orderHash
-    ) internal view returns (PT.Permit memory) {
-        return
-            PT.Permit({
-                kind: PT.PermitKind.PERMIT2,
-                token: address(0xB01),
-                maxAmount: 1e18,
-                deadline: block.timestamp + 7 days,
-                signature: new bytes(65),
-                nonce: 0,
-                orderHash: orderHash,
-                batchId: batchId
-            });
+    function _dummyPermit(OT.BatchId batchId, bytes32 orderHash) internal view returns (PT.Permit memory) {
+        return PT.Permit({
+            kind: PT.PermitKind.PERMIT2,
+            token: address(0xB01),
+            maxAmount: 1e18,
+            deadline: block.timestamp + 7 days,
+            signature: new bytes(65),
+            nonce: 0,
+            orderHash: orderHash,
+            batchId: batchId
+        });
     }
 
     function setUp() public {
@@ -84,15 +77,8 @@ contract OrderStoreTest is Test {
         vm.expectEmit(address(store));
         emit OrderStore.Commited(cid);
         store.commit(trader, batchId, chash);
-        (
-            address tr,
-            OT.BatchId b,
-            bytes32 h,
-            bool cancelled,
-            bool revealed,
-            bool executed,
-            bool slashed
-        ) = store.commits(cid);
+        (address tr, OT.BatchId b, bytes32 h, bool cancelled, bool revealed, bool executed, bool slashed) =
+            store.commits(cid);
 
         assertEq(tr, trader);
         assertEq(OT.BatchId.unwrap(b), OT.BatchId.unwrap(batchId));
@@ -124,7 +110,7 @@ contract OrderStoreTest is Test {
         vm.prank(manager);
         store.commit(trader, batchId, chash1);
 
-        (, , bytes32 h, , bool revealed, , ) = store.commits(cid);
+        (,, bytes32 h,, bool revealed,,) = store.commits(cid);
         assertEq(h, chash1);
         assertFalse(revealed);
     }
@@ -163,7 +149,7 @@ contract OrderStoreTest is Test {
         emit OrderStore.Revealed(cid);
         store.reveal(cid, o, p);
 
-        (, , , , bool revealed, , ) = store.commits(cid);
+        (,,,, bool revealed,,) = store.commits(cid);
         assertTrue(revealed, "revealed should be true");
     }
 }
