@@ -13,8 +13,7 @@ contract CrossingManager is Ownable {
     string public constant NAME = "HECATEX";
     bytes32 public constant VENUE_ID = keccak256(abi.encode(NAME));
     string private s_version;
-    bytes32 private immutable _CACHED_DOMAIN_SEPARATOR =
-        OHL.makeDomainSeparator(NAME, s_version, address(this), block.chainid);
+    bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
 
     IOrderStore public immutable STORE;
 
@@ -40,6 +39,7 @@ contract CrossingManager is Ownable {
         s_version = _version;
 
         STORE = IOrderStore(store_);
+        _CACHED_DOMAIN_SEPARATOR = OHL.makeDomainSeparator(NAME, _version, address(this), block.chainid);
     }
 
     //---------time math-----------------------
@@ -116,6 +116,7 @@ contract CrossingManager is Ownable {
     function listPair(address base, address quote, OT.BatchConfig memory batchConfig) public onlyOwner {
         OT.PairId pairId = OHL.pairIdOf(OT.Pair(base, quote));
         if (cfg[pairId].exists) revert CrossingManager__PairAlreadyExists();
+        batchConfig.exists = true;
 
         cfg[pairId] = batchConfig;
     }

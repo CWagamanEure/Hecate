@@ -154,4 +154,27 @@ contract OrderStoreTest is Test {
         (,,,, bool revealed,,) = store.commits(cid);
         assertTrue(revealed, "revealed should be true");
     }
+
+    function test_cancelCommit_onlyManager_andOnlyOwner() public {
+        OT.BatchId bid = OT.BatchId.wrap(keccak256("b5"));
+        bytes32 chash = keccak256("c5");
+        OT.CommitId cid = OHL.commitIdOf(trader, bid, chash);
+
+        vm.prank(manager);
+        store.commit(trader, bid, chash);
+
+        vm.expectRevert(OrderStore.OrderStore__NotManager.selector);
+        store.cancelCommit(trader, cid);
+
+        vm.prank(manager);
+        vm.expectRevert(OrderStore.OrderStore__CallerNotTrader.selector);
+        store.cancelCommit(makeAddr("other"), cid);
+
+        vm.prank(manager);
+        bool ok = store.cancelCommit(trader, cid);
+        assertTrue(ok);
+
+        (,,, bool cancelled,,,) = store.commits(cid);
+        assertTrue(cancelled, "cancel flag should persist");
+    }
 }

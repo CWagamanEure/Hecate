@@ -95,7 +95,7 @@ contract OrderStore is Ownable {
     }
 
     function cancelCommit(address trader, OT.CommitId commitId) external onlyManager returns (bool) {
-        Commitment memory commitment = commits[commitId];
+        Commitment storage commitment = commits[commitId];
         if (commitment.trader != trader) revert OrderStore__CallerNotTrader();
         commitment.cancelled = true;
         return true;
