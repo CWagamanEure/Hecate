@@ -46,9 +46,10 @@ contract BondVault is Ownable, ReentrancyGuard {
 
     //-------------Constructor------------------
 
-    constructor(address _manager, address _slashRecipient) Ownable(msg.sender) {
+    constructor(address _manager, address _slashRecipient, address _permit2) Ownable(msg.sender) {
         manager = _manager;
         s_slashRecipient = _slashRecipient;
+        PERMIT2 = _permit2;
         emit ManagerUpdated(address(0), _manager);
     }
 

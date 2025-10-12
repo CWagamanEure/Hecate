@@ -2,17 +2,18 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {CrossingManager} from "../src/CrossingManager.sol";
-import {OrderStore} from "../src/OrderStore.sol";
-import {OrderTypes as OT} from "../src/types/OrderTypes.sol";
-import {PermitTypes as PT} from "../src/types/PermitTypes.sol";
-import {OrderHashLib as OHL} from "../src/libraries/OrderHashLib.sol";
+import {CrossingManager} from "../../src/CrossingManager.sol";
+import {OrderStore} from "../../src/OrderStore.sol";
+import {OrderTypes as OT} from "../../src/types/OrderTypes.sol";
+import {PermitTypes as PT} from "../../src/types/PermitTypes.sol";
+import {OrderHashLib as OHL} from "../../src/libraries/OrderHashLib.sol";
+import {MockBondVault} from "../mocks/MockBondVault.sol";
 
 contract CrossingManagerTest is Test {
     CrossingManager cm;
     OrderStore store;
 
-    address bonds = makeAddr("bonds");
+    address bondsMock = address(new MockBondVault());
     address vault = makeAddr("vault");
     address pg = makeAddr("pg");
 
@@ -28,7 +29,7 @@ contract CrossingManagerTest is Test {
 
     function setUp() public {
         store = new OrderStore(address(0xdead));
-        cm = new CrossingManager("1", address(store), bonds, vault, pg);
+        cm = new CrossingManager("1", address(store), bondsMock, vault, pg);
 
         vm.prank(store.owner());
         store.changeManager(address(cm));
@@ -55,8 +56,8 @@ contract CrossingManagerTest is Test {
     function _permit(OT.BatchId bid) internal view returns (PT.Permit memory) {
         return PT.Permit({
             kind: PT.PermitKind.PERMIT2,
-            token: base,
-            maxAmount: 1e18,
+            token: address(0xC01),
+            maxAmount: 15,
             deadline: block.timestamp + 1 days,
             signature: new bytes(65),
             nonce: 0,
@@ -117,7 +118,6 @@ contract CrossingManagerTest is Test {
     function test_reveal_phaseGuard_andSuccess() public {
         (OT.BatchId bid,,) = cm.getCurrentBatch(pairId);
         PT.Permit memory p = _permit(bid);
-        OT.CommitId cid = cm.commit(pairId, keccak256("c-hash"), p);
 
         OT.Order memory o = OT.Order({
             base: base,
@@ -128,6 +128,10 @@ contract CrossingManagerTest is Test {
             batchId: bid,
             salt: keccak256("s1")
         });
+        bytes32 commitHash = OHL.makeCommitmentHash(o, trader);
+
+        vm.prank(trader);
+        OT.CommitId cid = cm.commit(pairId, commitHash, p);
 
         vm.expectRevert(CrossingManager.CrossingManager__NotRevealPhase.selector);
         vm.prank(trader);

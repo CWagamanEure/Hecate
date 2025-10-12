@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Ownable} from "openzeppelin/access/Ownable.sol";
-import {OrderStore} from "../src/OrderStore.sol";
-import {IOrderStore} from "../src/interfaces/IOrderStore.sol";
-import {OrderTypes as OT} from "../src/types/OrderTypes.sol";
-import {PermitTypes as PT} from "../src/types/PermitTypes.sol";
-import {OrderHashLib as OHL} from "../src/libraries/OrderHashLib.sol";
+import {OrderStore} from "../../src/OrderStore.sol";
+import {IOrderStore} from "../../src/interfaces/IOrderStore.sol";
+import {OrderTypes as OT} from "../../src/types/OrderTypes.sol";
+import {PermitTypes as PT} from "../../src/types/PermitTypes.sol";
+import {OrderHashLib as OHL} from "../../src/libraries/OrderHashLib.sol";
 
 contract OrderStoreTest is Test {
     OrderStore store;
@@ -15,6 +15,9 @@ contract OrderStoreTest is Test {
     address manager = makeAddr("manager");
     address trader = makeAddr("trader");
     address stranger = makeAddr("stranger");
+
+    event Committed(bytes32 commitId);
+    event Revealed(bytes32 commitId);
 
     function _dummyOrder(OT.BatchId batchId) internal view returns (OT.Order memory) {
         return OT.Order({
@@ -75,7 +78,7 @@ contract OrderStoreTest is Test {
 
         vm.prank(manager);
         vm.expectEmit(address(store));
-        emit OrderStore.Commited(cid);
+        emit Committed(OT.CommitId.unwrap(cid));
         store.commit(trader, batchId, chash);
         (address tr, OT.BatchId b, bytes32 h, bool cancelled, bool revealed, bool executed, bool slashed) =
             store.commits(cid);
@@ -146,7 +149,7 @@ contract OrderStoreTest is Test {
 
         vm.prank(manager);
         vm.expectEmit(address(store));
-        emit OrderStore.Revealed(cid);
+        emit Revealed(OT.CommitId.unwrap(cid));
         store.reveal(cid, o);
 
         (,,,, bool revealed,,) = store.commits(cid);

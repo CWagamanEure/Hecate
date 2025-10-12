@@ -51,6 +51,7 @@ contract CrossingManager is Ownable {
         s_version = _version;
 
         STORE = IOrderStore(store_);
+        BOND = IBondVault(bonds_);
         _CACHED_DOMAIN_SEPARATOR = OHL.makeDomainSeparator(NAME, _version, address(this), block.chainid);
     }
 
@@ -113,7 +114,7 @@ contract CrossingManager is Ownable {
         if (bondPermit.deadline <= block.timestamp) {
             revert CrossingManager__PermitExpired();
         }
-        if (bondPermit.maxAmount <= bondAmount) {
+        if (bondPermit.maxAmount < bondAmount) {
             revert CrossingManager__PermitTooLow();
         }
 

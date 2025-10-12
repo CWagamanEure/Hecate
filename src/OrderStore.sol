@@ -33,9 +33,9 @@ contract OrderStore is Ownable {
 
     //---------Events------------------
     event ManagerUpdated(address indexed oldManager, address indexed newManager);
-    event Commited(OT.CommitId commitId);
+    event Committed(bytes32 commitId);
     event CommitmentCancelled(bytes32, address);
-    event Revealed(OT.CommitId commitId);
+    event Revealed(bytes32 commitId);
 
     //---------Errors--------------------
     error OrderStore__BadState();
@@ -80,7 +80,7 @@ contract OrderStore is Ownable {
             slashed: false,
             cancelled: false
         });
-        emit Commited(commitId);
+        emit Committed(OT.CommitId.unwrap(commitId));
         return commitId;
     }
 
@@ -92,7 +92,7 @@ contract OrderStore is Ownable {
         c.revealed = true;
         reveals[commitId] = RevealedOrder({commitId: commitId, order: o});
 
-        emit Revealed(commitId);
+        emit Revealed(OT.CommitId.unwrap(commitId));
     }
 
     function cancelCommit(address trader, OT.CommitId commitId) external onlyManager {

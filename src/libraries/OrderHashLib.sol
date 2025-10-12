@@ -84,6 +84,6 @@ library OrderHashLib {
         pure
         returns (OT.CommitId)
     {
-        OT.CommitId.wrap(keccak256(abi.encode(trader, OT.BatchId.unwrap(batchId), commitmentHash)));
+        return OT.CommitId.wrap(keccak256(abi.encode(trader, OT.BatchId.unwrap(batchId), commitmentHash)));
     }
 }

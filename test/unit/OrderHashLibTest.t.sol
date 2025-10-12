@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {OrderTypes as OT} from "../src/types/OrderTypes.sol";
-import "../src/libraries/OrderHashLib.sol";
+import {OrderTypes as OT} from "../../src/types/OrderTypes.sol";
+import "../../src/libraries/OrderHashLib.sol";
 
 contract Exposed {
     function makeCommitmentHash(OT.Order memory o, address trader) external pure returns (bytes32) {
