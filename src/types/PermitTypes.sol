@@ -11,14 +11,19 @@ library PermitTypes {
 
     struct Permit {
         PermitKind kind;
-        address owner;
         address token;
-        address spender;
         uint256 maxAmount;
         uint256 deadline;
         bytes signature;
-        bytes32 nonce;
+        uint256 nonce;
         bytes32 orderHash;
         OT.BatchId batchId;
+    }
+
+    function witness(
+        bytes32 orderHash,
+        OT.BatchId bid
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(orderHash, OT.BatchId.unwrap(bid)));
     }
 }

@@ -20,6 +20,7 @@ contract CrossingManagerTest is Test {
     address trader = makeAddr("trader");
     address stranger = makeAddr("stranger");
     address bondToken = address(0xC01);
+    uint96 bondAmount = 10;
     address base = address(0xB01);
     address quote = address(0xB02);
 
@@ -27,7 +28,15 @@ contract CrossingManagerTest is Test {
 
     function setUp() public {
         store = new OrderStore(address(0xdead));
-        cm = new CrossingManager("1", address(store), bonds, vault, pg);
+        cm = new CrossingManager(
+            "1",
+            address(store),
+            bonds,
+            vault,
+            pg,
+            bondToken,
+            bondAmount
+        );
 
         vm.prank(store.owner());
         store.changeManager(address(cm));
@@ -52,18 +61,17 @@ contract CrossingManagerTest is Test {
     }
 
     function _permit(OT.BatchId bid) internal view returns (PT.Permit memory) {
-        return PT.Permit({
-            kind: PT.PermitKind.PERMIT2,
-            owner: trader,
-            token: base,
-            spender: trader,
-            maxAmount: 1e18,
-            deadline: block.timestamp + 1 days,
-            signature: new bytes(65),
-            nonce: 0,
-            orderHash: bytes32(0),
-            batchId: bid
-        });
+        return
+            PT.Permit({
+                kind: PT.PermitKind.PERMIT2,
+                token: base,
+                maxAmount: 1e18,
+                deadline: block.timestamp + 1 days,
+                signature: new bytes(65),
+                nonce: 0,
+                orderHash: bytes32(0),
+                batchId: bid
+            });
     }
 
     function test_listPair_revertsOnDuplicate() public {
@@ -79,18 +87,29 @@ contract CrossingManagerTest is Test {
             bondToken: bondToken,
             bondAmount: 10
         });
-        vm.expectRevert(CrossingManager.CrossingManager__PairAlreadyExists.selector);
+        vm.expectRevert(
+            CrossingManager.CrossingManager__PairAlreadyExists.selector
+        );
         vm.prank(owner);
         cm.listPair(base, quote, bc2);
     }
 
     function test_domainSeparator_matchesLibrary() public {
-        bytes32 expected = OHL.makeDomainSeparator(cm.NAME(), "1", address(cm), block.chainid);
-        assertEq(cm.domainSeparator(), expected, "domain sep should use version=1");
+        bytes32 expected = OHL.makeDomainSeparator(
+            cm.NAME(),
+            "1",
+            address(cm),
+            block.chainid
+        );
+        assertEq(
+            cm.domainSeparator(),
+            expected,
+            "domain sep should use version=1"
+        );
     }
 
     function test_commit_succeedsInCommitPhase_andStoresTrader() public {
-        (OT.BatchId bid,, OT.Phase phase) = cm.getCurrentBatch(pairId);
+        (OT.BatchId bid, , OT.Phase phase) = cm.getCurrentBatch(pairId);
         assertEq(uint8(phase), uint8(OT.Phase.COMMIT));
 
         PT.Permit memory p = _permit(bid);
@@ -98,25 +117,27 @@ contract CrossingManagerTest is Test {
         vm.prank(trader);
         OT.CommitId cid = cm.commit(pairId, keccak256("commitment"), p);
 
-        (address tr,,,,,,) = store.commits(cid);
+        (address tr, , , , , , ) = store.commits(cid);
         assertEq(tr, trader, "trader should be recorded in store");
     }
 
     function test_commiy_revertsOutsideCommitPhase() public {
-        (, uint64 idx,) = cm.getCurrentBatch(pairId);
-        (uint256 tStart, uint256 tCommitEnd,) = cm.batchTimes(pairId, idx);
+        (, uint64 idx, ) = cm.getCurrentBatch(pairId);
+        (uint256 tStart, uint256 tCommitEnd, ) = cm.batchTimes(pairId, idx);
         vm.warp(tCommitEnd + 1);
 
-        (OT.BatchId bid,, OT.Phase phase) = cm.getCurrentBatch(pairId);
+        (OT.BatchId bid, , OT.Phase phase) = cm.getCurrentBatch(pairId);
         assertEq(uint8(phase), uint8(OT.Phase.REVEAL));
 
         PT.Permit memory p = _permit(bid);
-        vm.expectRevert(CrossingManager.CrossingManager__NotCommitPhase.selector);
+        vm.expectRevert(
+            CrossingManager.CrossingManager__NotCommitPhase.selector
+        );
         cm.commit(pairId, keccak256("c"), p);
     }
 
     function test_reveal_phaseGuard_andSuccess() public {
-        (OT.BatchId bid,,) = cm.getCurrentBatch(pairId);
+        (OT.BatchId bid, , ) = cm.getCurrentBatch(pairId);
         PT.Permit memory p = _permit(bid);
         OT.CommitId cid = cm.commit(pairId, keccak256("c-hash"), p);
 
@@ -130,23 +151,25 @@ contract CrossingManagerTest is Test {
             salt: keccak256("s1")
         });
 
-        vm.expectRevert(CrossingManager.CrossingManager__NotRevealPhase.selector);
+        vm.expectRevert(
+            CrossingManager.CrossingManager__NotRevealPhase.selector
+        );
         vm.prank(trader);
         cm.reveal(cid, pairId, o, p);
 
-        (, uint64 idx,) = cm.getCurrentBatch(pairId);
-        (,, uint256 tClear) = cm.batchTimes(pairId, idx);
-        (uint256 tStart,,) = cm.batchTimes(pairId, idx);
+        (, uint64 idx, ) = cm.getCurrentBatch(pairId);
+        (, , uint256 tClear) = cm.batchTimes(pairId, idx);
+        (uint256 tStart, , ) = cm.batchTimes(pairId, idx);
         vm.warp(tStart + 11 minutes);
 
         vm.prank(trader);
         cm.reveal(cid, pairId, o, p);
-        (,,,, bool revealed,,) = store.commits(cid);
+        (, , , , bool revealed, , ) = store.commits(cid);
         assertTrue(revealed);
     }
 
     function test_cancelCommit_onlyCommitPhase_andOnlyOwner() public {
-        (OT.BatchId bid,,) = cm.getCurrentBatch(pairId);
+        (OT.BatchId bid, , ) = cm.getCurrentBatch(pairId);
         PT.Permit memory p = _permit(bid);
         vm.prank(trader);
         OT.CommitId cid = cm.commit(pairId, keccak256("cx"), p);
@@ -157,14 +180,16 @@ contract CrossingManagerTest is Test {
 
         vm.prank(trader);
         cm.cancelCommit(pairId, cid);
-        (,,, bool cancelled,,,) = store.commits(cid);
+        (, , , bool cancelled, , , ) = store.commits(cid);
         assertTrue(cancelled);
 
-        (, uint64 idx,) = cm.getCurrentBatch(pairId);
-        (uint256 tStart, uint256 tCommitEnd,) = cm.batchTimes(pairId, idx);
+        (, uint64 idx, ) = cm.getCurrentBatch(pairId);
+        (uint256 tStart, uint256 tCommitEnd, ) = cm.batchTimes(pairId, idx);
         vm.warp(tCommitEnd + 1);
         vm.prank(trader);
-        vm.expectRevert(CrossingManager.CrossingManager__NotCommitPhase.selector);
+        vm.expectRevert(
+            CrossingManager.CrossingManager__NotCommitPhase.selector
+        );
         cm.cancelCommit(pairId, cid);
     }
 }
