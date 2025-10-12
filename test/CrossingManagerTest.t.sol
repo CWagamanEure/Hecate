@@ -28,7 +28,7 @@ contract CrossingManagerTest is Test {
 
     function setUp() public {
         store = new OrderStore(address(0xdead));
-        cm = new CrossingManager("1", address(store), bonds, vault, pg, bondToken, bondAmount);
+        cm = new CrossingManager("1", address(store), bonds, vault, pg);
 
         vm.prank(store.owner());
         store.changeManager(address(cm));
@@ -131,7 +131,7 @@ contract CrossingManagerTest is Test {
 
         vm.expectRevert(CrossingManager.CrossingManager__NotRevealPhase.selector);
         vm.prank(trader);
-        cm.reveal(cid, pairId, o, p);
+        cm.reveal(cid, pairId, o);
 
         (, uint64 idx,) = cm.getCurrentBatch(pairId);
         (,, uint256 tClear) = cm.batchTimes(pairId, idx);
@@ -139,7 +139,7 @@ contract CrossingManagerTest is Test {
         vm.warp(tStart + 11 minutes);
 
         vm.prank(trader);
-        cm.reveal(cid, pairId, o, p);
+        cm.reveal(cid, pairId, o);
         (,,,, bool revealed,,) = store.commits(cid);
         assertTrue(revealed);
     }

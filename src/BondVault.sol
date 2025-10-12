@@ -19,7 +19,7 @@ contract BondVault is Ownable, ReentrancyGuard {
     }
     //--------------Variables---------------------
 
-    address private s_manager;
+    address public manager;
     address private s_slashRecipient;
     address public immutable PERMIT2;
 
@@ -29,27 +29,46 @@ contract BondVault is Ownable, ReentrancyGuard {
     //-------------Events--------------------------
     event ManagerUpdated(address indexed oldManager, address indexed newManager);
     event BondLocked(bytes32 commitId, address indexed trader);
+    event BondClaimable(bytes32 indexed commitId, bool on);
+    event BondReleased(bytes32 commitId, address trader, uint256 amount);
+    event BondSlashed(bytes32 commitId, address sink, uint256 amount, uint8 reason);
     //--------------Errors----------------------
 
+    error BondVault__NotTrader();
     error BondVault__NotManager();
     error BondVault__BadState();
 
     //---------------Modifiers-----------------
     modifier onlyManager() {
-        if (msg.sender != s_manager) revert BondVault__NotManager();
+        if (msg.sender != manager) revert BondVault__NotManager();
         _;
     }
 
     //-------------Constructor------------------
 
     constructor(address _manager, address _slashRecipient) Ownable(msg.sender) {
-        s_manager = _manager;
+        manager = _manager;
         s_slashRecipient = _slashRecipient;
         emit ManagerUpdated(address(0), _manager);
     }
 
     //--------------------Functions----------------------
 
+    //---------------------User-------------------------
+    function claim(OT.CommitId commitId) external nonReentrant {
+        Bond storage b = bonds[commitId];
+        if (!b.locked || b.claimed || !claimable[commitId]) {
+            revert BondVault__BadState();
+        }
+        if (msg.sender != b.trader) revert BondVault__NotTrader();
+
+        b.claimed = true;
+        SafeTransferLib.safeTransfer(b.token, b.trader, b.amount);
+
+        emit BondReleased(OT.CommitId.unwrap(commitId), b.trader, b.amount);
+    }
+
+    //----------------View-----------------------
     function getBond(OT.CommitId commitId) external view returns (Bond memory) {
         return bonds[commitId];
     }
@@ -62,11 +81,15 @@ contract BondVault is Ownable, ReentrancyGuard {
         return (bonds[commitId].claimed);
     }
 
+    function isClaimable(OT.CommitId commitId) external view returns (bool) {
+        return claimable[commitId];
+    }
+
     //-----------Admin---------------------
 
     function changeManager(address newManager) external onlyOwner {
-        address temp = s_manager;
-        s_manager = newManager;
+        address temp = manager;
+        manager = newManager;
         emit ManagerUpdated(temp, newManager);
     }
 
@@ -108,9 +131,27 @@ contract BondVault is Ownable, ReentrancyGuard {
         emit BondLocked(OT.CommitId.unwrap(commitId), trader);
     }
 
-    function release(OT.CommitId commitId, address to) external onlyManager {}
+    function slash(OT.CommitId commitId, address to, uint8 reason) external onlyManager nonReentrant {
+        Bond storage b = bonds[commitId];
+        if (!b.locked || b.claimed) revert BondVault__BadState();
 
-    function slash(OT.CommitId commitId, address to, uint8 reason) external onlyManager {}
+        b.claimed = true;
+        address sink = (to == address(0) ? s_slashRecipient : to);
+        SafeTransferLib.safeTransfer(b.token, sink, b.amount);
 
-    //---------------------Internal----------------------
+        emit BondSlashed(OT.CommitId.unwrap(commitId), sink, b.amount, reason);
+    }
+
+    function setClaimableBatch(OT.CommitId[] calldata ids, bool on) external onlyManager {
+        uint256 n = ids.length;
+        for (uint256 i; i < n; i++) {
+            claimable[ids[i]] = on;
+            emit BondClaimable(OT.CommitId.unwrap(ids[i]), on);
+        }
+    }
+
+    function setClaimable(OT.CommitId cid, bool on) external onlyManager {
+        claimable[cid] = on;
+        emit BondClaimable(OT.CommitId.unwrap(cid), on);
+    }
 }

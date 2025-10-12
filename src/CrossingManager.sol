@@ -8,25 +8,27 @@ import {OrderStore} from "./OrderStore.sol";
 import {IOrderStore} from "./interfaces/IOrderStore.sol";
 import {OrderHashLib as OHL} from "./libraries/OrderHashLib.sol";
 import {Ownable} from "openzeppelin/access/Ownable.sol";
+import {IBondVault} from "./interfaces/IBondVault.sol";
 
 contract CrossingManager is Ownable {
     string public constant NAME = "HECATEX";
     bytes32 public constant VENUE_ID = keccak256(abi.encode(NAME));
     string private s_version;
     bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
-    address public bondToken;
-    uint96 public bondAmount;
 
     IOrderStore public immutable STORE;
+    IBondVault public immutable BOND;
 
     mapping(OT.PairId => OT.BatchConfig) public cfg;
 
     //-----------Events--------------------
-    event Commited(bytes32);
-    event ChangedBondAmount(uint96);
-    event ChangedBondToken(address);
+    event Commited(bytes32, bytes32, address);
+    event Revealed(bytes32, bytes32, address);
 
     //-----------Errors-----------------
+    error CrossingManager__CommitIdsDontMatch();
+    error CrossingManager__PermitTooLow();
+    error CrossingManager__PermitExpired();
     error CrossingManager__BatchNotConfigured();
     error CrossingManager__NotCommitPhase();
     error CrossingManager__NotRevealPhase();
@@ -34,6 +36,7 @@ contract CrossingManager is Ownable {
     error CrossingManager__NonexistentPairId();
     error CrossingManager__PairAlreadyExists();
     error CrossingManager__AddressZero();
+    error CrossingManager__WrongTokenPermit();
 
     //--------Modifiers-----------------------
     modifier addressZero(address input) {
@@ -42,18 +45,10 @@ contract CrossingManager is Ownable {
     }
 
     //--------------Constructor-----------------------
-    constructor(
-        string memory _version,
-        address store_,
-        address bonds_,
-        address vault_,
-        address pg_,
-        address _bondToken,
-        uint96 _bondAmount
-    ) Ownable(msg.sender) {
+    constructor(string memory _version, address store_, address bonds_, address vault_, address pg_)
+        Ownable(msg.sender)
+    {
         s_version = _version;
-        bondAmount = _bondAmount;
-        bondToken = _bondToken;
 
         STORE = IOrderStore(store_);
         _CACHED_DOMAIN_SEPARATOR = OHL.makeDomainSeparator(NAME, _version, address(this), block.chainid);
@@ -104,18 +99,48 @@ contract CrossingManager is Ownable {
     {
         (OT.BatchId bid,, OT.Phase phase) = getCurrentBatch(pairId);
         if (phase != OT.Phase.COMMIT) revert CrossingManager__NotCommitPhase();
-        //COLLECT BOND
 
+        //Get IDs
+        OT.CommitId cid = OHL.commitIdOf(msg.sender, bid, commitmentHash);
+
+        //COLLECT BOND
+        OT.BatchConfig memory batchConfig = cfg[pairId];
+        address bondToken = batchConfig.bondToken;
+        uint96 bondAmount = batchConfig.bondAmount;
+        if (bondPermit.token != bondToken) {
+            revert CrossingManager__WrongTokenPermit();
+        }
+        if (bondPermit.deadline <= block.timestamp) {
+            revert CrossingManager__PermitExpired();
+        }
+        if (bondPermit.maxAmount <= bondAmount) {
+            revert CrossingManager__PermitTooLow();
+        }
+
+        BOND.lockWithPermit(cid, msg.sender, bondToken, bondAmount, bondPermit);
+
+        //Send to OrderStore
         OT.CommitId commitId = STORE.commit(msg.sender, bid, commitmentHash);
-        emit Commited(OT.CommitId.unwrap(commitId));
+        if (OT.CommitId.unwrap(commitId) != OT.CommitId.unwrap(cid)) {
+            revert CrossingManager__CommitIdsDontMatch();
+        }
+        emit Commited(OT.CommitId.unwrap(commitId), OT.BatchId.unwrap(bid), msg.sender);
         return commitId;
     }
 
-    function reveal(OT.CommitId cid, OT.PairId pairId, OT.Order calldata o, PT.Permit calldata p) external {
+    function reveal(OT.CommitId cid, OT.PairId pairId, OT.Order calldata o) external {
         (OT.BatchId bid,, OT.Phase phase) = getCurrentBatch(pairId);
         if (phase != OT.Phase.REVEAL) revert CrossingManager__NotRevealPhase();
 
-        STORE.reveal(cid, o, p);
+        //Compute and compare
+        bytes32 commitmentHash = OHL.makeCommitmentHash(o, msg.sender);
+        OT.CommitId computedCommitId = OHL.commitIdOf(msg.sender, bid, commitmentHash);
+        if (OT.CommitId.unwrap(cid) != OT.CommitId.unwrap(computedCommitId)) {
+            revert CrossingManager__CommitIdsDontMatch();
+        }
+
+        STORE.reveal(cid, o);
+        emit Revealed(OT.CommitId.unwrap(cid), OT.BatchId.unwrap(bid), msg.sender);
     }
 
     function clear(OT.PairId pairId) external {
@@ -142,15 +167,5 @@ contract CrossingManager is Ownable {
         batchConfig.exists = true;
 
         cfg[pairId] = batchConfig;
-    }
-
-    function changeBondAmount(uint96 newAmount) external onlyOwner {
-        bondAmount = newAmount;
-        emit ChangedBondAmount(newAmount);
-    }
-
-    function changeBondToken(address newToken) external onlyOwner addressZero(newToken) {
-        bondToken = newToken;
-        emit ChangedBondToken(newToken);
     }
 }

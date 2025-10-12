@@ -15,7 +15,7 @@ interface IOrderStore {
         external
         returns (OT.CommitId commitId);
 
-    function reveal(OT.CommitId commitId, OT.Order calldata order, PT.Permit calldata permit) external;
+    function reveal(OT.CommitId commitId, OT.Order calldata order) external;
 
     function cancelCommit(address trader, OT.CommitId) external;
 

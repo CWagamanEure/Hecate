@@ -129,7 +129,7 @@ contract OrderStoreTest is Test {
 
         vm.prank(stranger);
         vm.expectRevert(OrderStore.OrderStore__NotManager.selector);
-        store.reveal(cid, o, p);
+        store.reveal(cid, o);
     }
 
     function testReveal_SetsRevealedAndEmits() public {
@@ -147,7 +147,7 @@ contract OrderStoreTest is Test {
         vm.prank(manager);
         vm.expectEmit(address(store));
         emit OrderStore.Revealed(cid);
-        store.reveal(cid, o, p);
+        store.reveal(cid, o);
 
         (,,,, bool revealed,,) = store.commits(cid);
         assertTrue(revealed, "revealed should be true");
@@ -169,8 +169,7 @@ contract OrderStoreTest is Test {
         store.cancelCommit(makeAddr("other"), cid);
 
         vm.prank(manager);
-        bool ok = store.cancelCommit(trader, cid);
-        assertTrue(ok);
+        store.cancelCommit(trader, cid);
 
         (,,, bool cancelled,,,) = store.commits(cid);
         assertTrue(cancelled, "cancel flag should persist");

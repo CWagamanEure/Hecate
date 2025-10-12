@@ -21,7 +21,6 @@ contract OrderStore is Ownable {
     struct RevealedOrder {
         OT.CommitId commitId;
         OT.Order order;
-        PT.Permit permit;
     }
     //----------variables--------
 
@@ -35,9 +34,11 @@ contract OrderStore is Ownable {
     //---------Events------------------
     event ManagerUpdated(address indexed oldManager, address indexed newManager);
     event Commited(OT.CommitId commitId);
+    event CommitmentCancelled(bytes32, address);
     event Revealed(OT.CommitId commitId);
 
     //---------Errors--------------------
+    error OrderStore__BadState();
     error OrderStore__NotManager();
     error OrderStore__AddressZeroUsed();
     error OrderStore__PrevBatchNotFinalized();
@@ -83,28 +84,33 @@ contract OrderStore is Ownable {
         return commitId;
     }
 
-    function reveal(OT.CommitId commitId, OT.Order calldata o, PT.Permit calldata p) external onlyManager {
+    function reveal(OT.CommitId commitId, OT.Order calldata o) external onlyManager {
         Commitment storage c = commits[commitId];
         if (c.revealed == true || c.executed == true || c.slashed == true || c.cancelled == true) {
             revert OrderStore__RestrictedCommitment();
         }
         c.revealed = true;
-        reveals[commitId] = RevealedOrder({commitId: commitId, order: o, permit: p});
+        reveals[commitId] = RevealedOrder({commitId: commitId, order: o});
 
         emit Revealed(commitId);
     }
 
-    function cancelCommit(address trader, OT.CommitId commitId) external onlyManager returns (bool) {
+    function cancelCommit(address trader, OT.CommitId commitId) external onlyManager {
         Commitment storage commitment = commits[commitId];
         if (commitment.trader != trader) revert OrderStore__CallerNotTrader();
+        if (commitment.cancelled || commitment.revealed || commitment.executed) {
+            revert OrderStore__BadState();
+        }
         commitment.cancelled = true;
-        return true;
+        emit CommitmentCancelled(OT.CommitId.unwrap(commitId), trader);
     }
 
+    //----------------View---------------
     function getCommited(OT.CommitId commitId) public view returns (Commitment memory) {
         return commits[commitId];
     }
 
+    //--------------------Admin--------------
     function changeManager(address newManager) public onlyOwner addressZero(newManager) {
         address temp = manager;
         manager = newManager;

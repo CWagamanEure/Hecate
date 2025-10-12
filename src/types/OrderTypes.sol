@@ -50,6 +50,6 @@ library OrderTypes {
         uint256 staleSecs;
         uint256 maxDevBps;
         address bondToken;
-        uint256 bondAmount;
+        uint96 bondAmount;
     }
 }
