@@ -18,6 +18,7 @@ contract BondVault is Ownable, ReentrancyGuard {
         bool claimed;
     }
     //--------------Variables---------------------
+
     address private s_manager;
     address private s_slashRecipient;
     address public immutable PERMIT2;
@@ -26,12 +27,10 @@ contract BondVault is Ownable, ReentrancyGuard {
     mapping(OT.CommitId => bool) public claimable;
 
     //-------------Events--------------------------
-    event ManagerUpdated(
-        address indexed oldManager,
-        address indexed newManager
-    );
+    event ManagerUpdated(address indexed oldManager, address indexed newManager);
     event BondLocked(bytes32 commitId, address indexed trader);
     //--------------Errors----------------------
+
     error BondVault__NotManager();
     error BondVault__BadState();
 
@@ -85,14 +84,7 @@ contract BondVault is Ownable, ReentrancyGuard {
     ) external onlyManager nonReentrant {
         Bond storage b = bonds[commitId];
         if (b.locked) revert BondVault__BadState();
-        PermitExecutor.pull(
-            PERMIT2,
-            trader,
-            bondToken,
-            address(this),
-            bondAmount,
-            p
-        );
+        PermitExecutor.pull(PERMIT2, trader, bondToken, address(this), bondAmount, p);
         b.trader = trader;
         b.token = bondToken;
         b.amount = bondAmount;
@@ -101,21 +93,14 @@ contract BondVault is Ownable, ReentrancyGuard {
     }
 
     //Lock a bond using ERC20 allowance to this vault
-    function lockFrom(
-        OT.CommitId commitId,
-        address bondToken,
-        uint96 bondAmount,
-        address trader
-    ) external onlyManager {
+    function lockFrom(OT.CommitId commitId, address bondToken, uint96 bondAmount, address trader)
+        external
+        onlyManager
+    {
         Bond storage b = bonds[commitId];
         if (b.locked) revert BondVault__BadState();
 
-        SafeTransferLib.safeTransferFrom(
-            bondToken,
-            trader,
-            address(this),
-            bondAmount
-        );
+        SafeTransferLib.safeTransferFrom(bondToken, trader, address(this), bondAmount);
         b.trader = trader;
         b.token = bondToken;
         b.amount = bondAmount;
@@ -125,11 +110,7 @@ contract BondVault is Ownable, ReentrancyGuard {
 
     function release(OT.CommitId commitId, address to) external onlyManager {}
 
-    function slash(
-        OT.CommitId commitId,
-        address to,
-        uint8 reason
-    ) external onlyManager {}
+    function slash(OT.CommitId commitId, address to, uint8 reason) external onlyManager {}
 
     //---------------------Internal----------------------
 }

@@ -33,10 +33,7 @@ contract OrderStore is Ownable {
     mapping(OT.CommitId => RevealedOrder) public reveals;
 
     //---------Events------------------
-    event ManagerUpdated(
-        address indexed oldManager,
-        address indexed newManager
-    );
+    event ManagerUpdated(address indexed oldManager, address indexed newManager);
     event Commited(OT.CommitId commitId);
     event Revealed(OT.CommitId commitId);
 
@@ -67,16 +64,12 @@ contract OrderStore is Ownable {
     }
 
     //---------Functions--------------------
-    function commit(
-        address _trader,
-        OT.BatchId _batchId,
-        bytes32 _commitmentHash
-    ) external onlyManager returns (OT.CommitId) {
-        OT.CommitId commitId = OHL.commitIdOf(
-            _trader,
-            _batchId,
-            _commitmentHash
-        );
+    function commit(address _trader, OT.BatchId _batchId, bytes32 _commitmentHash)
+        external
+        onlyManager
+        returns (OT.CommitId)
+    {
+        OT.CommitId commitId = OHL.commitIdOf(_trader, _batchId, _commitmentHash);
         commits[commitId] = Commitment({
             trader: _trader,
             batchId: _batchId,
@@ -90,49 +83,29 @@ contract OrderStore is Ownable {
         return commitId;
     }
 
-    function reveal(
-        OT.CommitId commitId,
-        OT.Order calldata o,
-        PT.Permit calldata p
-    ) external onlyManager {
+    function reveal(OT.CommitId commitId, OT.Order calldata o, PT.Permit calldata p) external onlyManager {
         Commitment storage c = commits[commitId];
-        if (
-            c.revealed == true ||
-            c.executed == true ||
-            c.slashed == true ||
-            c.cancelled == true
-        ) {
+        if (c.revealed == true || c.executed == true || c.slashed == true || c.cancelled == true) {
             revert OrderStore__RestrictedCommitment();
         }
         c.revealed = true;
-        reveals[commitId] = RevealedOrder({
-            commitId: commitId,
-            order: o,
-            permit: p
-        });
+        reveals[commitId] = RevealedOrder({commitId: commitId, order: o, permit: p});
 
         emit Revealed(commitId);
     }
 
-    function cancelCommit(
-        address trader,
-        OT.CommitId commitId
-    ) external onlyManager returns (bool) {
+    function cancelCommit(address trader, OT.CommitId commitId) external onlyManager returns (bool) {
         Commitment storage commitment = commits[commitId];
         if (commitment.trader != trader) revert OrderStore__CallerNotTrader();
         commitment.cancelled = true;
         return true;
     }
 
-    function getCommited(
-        OT.CommitId commitId
-    ) public view returns (Commitment memory) {
+    function getCommited(OT.CommitId commitId) public view returns (Commitment memory) {
         return commits[commitId];
     }
 
-    function changeManager(
-        address newManager
-    ) public onlyOwner addressZero(newManager) {
+    function changeManager(address newManager) public onlyOwner addressZero(newManager) {
         address temp = manager;
         manager = newManager;
         emit ManagerUpdated(temp, newManager);

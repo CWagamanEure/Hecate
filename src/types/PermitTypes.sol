@@ -20,10 +20,7 @@ library PermitTypes {
         OT.BatchId batchId;
     }
 
-    function witness(
-        bytes32 orderHash,
-        OT.BatchId bid
-    ) internal pure returns (bytes32) {
+    function witness(bytes32 orderHash, OT.BatchId bid) internal pure returns (bytes32) {
         return keccak256(abi.encode(orderHash, OT.BatchId.unwrap(bid)));
     }
 }

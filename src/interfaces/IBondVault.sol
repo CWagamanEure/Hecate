@@ -13,9 +13,7 @@ interface IBondVault {
         bool claimed;
     }
 
-    function getBond(
-        OT.CommitId commitId
-    ) external view returns (BondView memory);
+    function getBond(OT.CommitId commitId) external view returns (BondView memory);
 
     function isLocked(OT.CommitId commitId) external view returns (bool);
 
@@ -30,50 +28,20 @@ interface IBondVault {
     //---------Manager-----------------------
 
     //Lock a bond by pulling tokens with Permit2/EIP-2612
-    function lockWithPermit(
-        OT.CommitId commitId,
-        address trader,
-        address token,
-        uint96 amount,
-        PT.Permit calldata p
-    ) external;
+    function lockWithPermit(OT.CommitId commitId, address trader, address token, uint96 amount, PT.Permit calldata p)
+        external;
 
     //Lock a bond using ERC20 allowance to this vault
-    function lockFrom(
-        OT.CommitId commitId,
-        address trader,
-        address token,
-        uint96 amount
-    ) external;
+    function lockFrom(OT.CommitId commitId, address trader, address token, uint96 amount) external;
 
     function release(OT.CommitId commitId, address to) external;
 
     function slash(OT.CommitId commitId, address to, uint8 reason) external;
 
     //--------Events-----------------------
-    event ManagerUpdated(
-        address indexed oldManager,
-        address indexed newManager
-    );
-    event SlashRecipientUpdated(
-        address indexed oldRecipient,
-        address indexed newRecipient
-    );
-    event BondLocked(
-        bytes32 indexed commitId,
-        address indexed trader,
-        address indexed token,
-        uint96 amount
-    );
-    event BondReleased(
-        bytes32 indexed commitId,
-        address indexed to,
-        uint96 amount
-    );
-    event BondSlashed(
-        bytes32 indexed commitId,
-        address indexed to,
-        uint96 amount,
-        uint8 reason
-    );
+    event ManagerUpdated(address indexed oldManager, address indexed newManager);
+    event SlashRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
+    event BondLocked(bytes32 indexed commitId, address indexed trader, address indexed token, uint96 amount);
+    event BondReleased(bytes32 indexed commitId, address indexed to, uint96 amount);
+    event BondSlashed(bytes32 indexed commitId, address indexed to, uint96 amount, uint8 reason);
 }
