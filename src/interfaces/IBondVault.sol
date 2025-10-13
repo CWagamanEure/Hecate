@@ -5,43 +5,39 @@ import {OrderTypes as OT} from "../types/OrderTypes.sol";
 import {PermitTypes as PT} from "../types/PermitTypes.sol";
 
 interface IBondVault {
-    struct BondView {
-        address trader;
-        address token;
-        uint96 amount;
-        bool locked;
-        bool claimed;
-    }
+    // -------- Views --------
+    function manager() external view returns (address);
 
-    function getBond(OT.CommitId commitId) external view returns (BondView memory);
+    function PERMIT2() external view returns (address);
+
+    function getBond(OT.CommitId commitId) external view returns (OT.Bond memory);
 
     function isLocked(OT.CommitId commitId) external view returns (bool);
 
     function isClaimed(OT.CommitId commitId) external view returns (bool);
 
-    //-----------Admin---------------------
+    function isClaimable(OT.CommitId commitId) external view returns (bool);
 
+    // -------- User --------
+    function claim(OT.CommitId commitId) external;
+
+    // -------- Owner/Admin --------
     function changeManager(address newManager) external;
 
     function setSlashRecipient(address recipient) external;
 
-    //---------Manager-----------------------
+    // -------- Manager --------
+    function lockWithPermit(
+        OT.CommitId commitId,
+        address trader,
+        address bondToken,
+        uint96 bondAmount,
+        PT.Permit calldata p
+    ) external;
 
-    //Lock a bond by pulling tokens with Permit2/EIP-2612
-    function lockWithPermit(OT.CommitId commitId, address trader, address token, uint96 amount, PT.Permit calldata p)
-        external;
-
-    //Lock a bond using ERC20 allowance to this vault
-    function lockFrom(OT.CommitId commitId, address trader, address token, uint96 amount) external;
-
-    function release(OT.CommitId commitId, address to) external;
+    function lockFrom(OT.CommitId commitId, address bondToken, uint96 bondAmount, address trader) external;
 
     function slash(OT.CommitId commitId, address to, uint8 reason) external;
 
-    //--------Events-----------------------
-    event ManagerUpdated(address indexed oldManager, address indexed newManager);
-    event SlashRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
-    event BondLocked(bytes32 indexed commitId, address indexed trader, address indexed token, uint96 amount);
-    event BondReleased(bytes32 indexed commitId, address indexed to, uint96 amount);
-    event BondSlashed(bytes32 indexed commitId, address indexed to, uint96 amount, uint8 reason);
+    function setClaimable(OT.CommitId cid, bool on) external;
 }

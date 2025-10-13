@@ -17,6 +17,14 @@ library OrderTypes {
         CLEAR
     }
 
+    struct Bond {
+        address trader;
+        address token;
+        uint96 amount;
+        bool locked;
+        bool claimed;
+    }
+
     struct Pair {
         address base;
         address quote;

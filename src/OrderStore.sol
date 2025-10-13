@@ -5,8 +5,9 @@ import {Ownable} from "openzeppelin/access/Ownable.sol";
 import {OrderTypes as OT} from "./types/OrderTypes.sol";
 import {PermitTypes as PT} from "./types/PermitTypes.sol";
 import {OrderHashLib as OHL} from "./libraries/OrderHashLib.sol";
+import {IOrderStore} from "./interfaces/IOrderStore.sol";
 
-contract OrderStore is Ownable {
+contract OrderStore is IOrderStore, Ownable {
     //-------Structs---------------
 
     //----------variables--------

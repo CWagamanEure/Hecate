@@ -7,23 +7,16 @@ import {Ownable} from "openzeppelin/access/Ownable.sol";
 import {ReentrancyGuard} from "solady/utils/ReentrancyGuard.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {PermitExecutor} from "./libraries/PermitExecutor.sol";
+import {IBondVault} from "./interfaces/IBondVault.sol";
 
-contract BondVault is Ownable, ReentrancyGuard {
-    //---------------Structs-------------------
-    struct Bond {
-        address trader;
-        address token;
-        uint96 amount;
-        bool locked;
-        bool claimed;
-    }
-    //--------------Variables---------------------
+contract BondVault is IBondVault, Ownable, ReentrancyGuard {
+    //---------------Variables-------------------
 
     address public manager;
     address private s_slashRecipient;
     address public immutable PERMIT2;
 
-    mapping(OT.CommitId => Bond) public bonds;
+    mapping(OT.CommitId => OT.Bond) public bonds;
     mapping(OT.CommitId => bool) public claimable;
 
     //-------------Events--------------------------
@@ -57,7 +50,7 @@ contract BondVault is Ownable, ReentrancyGuard {
 
     //---------------------User-------------------------
     function claim(OT.CommitId commitId) external nonReentrant {
-        Bond storage b = bonds[commitId];
+        OT.Bond storage b = bonds[commitId];
         if (!b.locked || b.claimed || !claimable[commitId]) {
             revert BondVault__BadState();
         }
@@ -70,7 +63,7 @@ contract BondVault is Ownable, ReentrancyGuard {
     }
 
     //----------------View-----------------------
-    function getBond(OT.CommitId commitId) external view returns (Bond memory) {
+    function getBond(OT.CommitId commitId) external view returns (OT.Bond memory) {
         return bonds[commitId];
     }
 
@@ -106,7 +99,7 @@ contract BondVault is Ownable, ReentrancyGuard {
         uint96 bondAmount,
         PT.Permit calldata p
     ) external onlyManager nonReentrant {
-        Bond storage b = bonds[commitId];
+        OT.Bond storage b = bonds[commitId];
         if (b.locked) revert BondVault__BadState();
         PermitExecutor.pull(PERMIT2, trader, bondToken, address(this), bondAmount, p);
         b.trader = trader;
@@ -121,7 +114,7 @@ contract BondVault is Ownable, ReentrancyGuard {
         external
         onlyManager
     {
-        Bond storage b = bonds[commitId];
+        OT.Bond storage b = bonds[commitId];
         if (b.locked) revert BondVault__BadState();
 
         SafeTransferLib.safeTransferFrom(bondToken, trader, address(this), bondAmount);
@@ -133,7 +126,7 @@ contract BondVault is Ownable, ReentrancyGuard {
     }
 
     function slash(OT.CommitId commitId, address to, uint8 reason) external onlyManager nonReentrant {
-        Bond storage b = bonds[commitId];
+        OT.Bond storage b = bonds[commitId];
         if (!b.locked || b.claimed) revert BondVault__BadState();
 
         b.claimed = true;

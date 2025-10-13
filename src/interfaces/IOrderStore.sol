@@ -5,45 +5,18 @@ import {OrderTypes as OT} from "../types/OrderTypes.sol";
 import {PermitTypes as PT} from "../types/PermitTypes.sol";
 
 interface IOrderStore {
-    function owner() external view returns (address);
-
+    // -------- Views --------
     function manager() external view returns (address);
 
-    function setManager(address m) external;
+    // Note: returns the full Commitment struct
+    function getCommited(OT.CommitId commitId) external view returns (OT.Commitment memory);
 
-    function commit(address trader, OT.BatchId batchId, bytes32 commitmentHash)
-        external
-        returns (OT.CommitId commitId);
+    // -------- Mutating --------
+    function commit(address _trader, OT.BatchId _batchId, bytes32 _commitmentHash) external returns (OT.CommitId);
 
-    function reveal(OT.CommitId commitId, OT.Order calldata order) external;
+    function reveal(OT.CommitId commitId, OT.Order calldata o) external;
 
-    function cancelCommit(address trader, OT.CommitId) external;
+    function cancelCommit(address trader, OT.CommitId commitId) external;
 
-    //Mapping mirros
-    function commits(OT.CommitId commitId)
-        external
-        view
-        returns (
-            address trader,
-            bytes32 batchId,
-            bytes32 commitmentHash,
-            bool revealed,
-            bool executed,
-            bool slashed,
-            bool cancelled
-        );
-
-    function reveals(bytes32 commitId)
-        external
-        view
-        returns (
-            address base,
-            address quote,
-            OT.Side side,
-            uint256 size,
-            uint256 bandBps,
-            OT.BatchId batchId,
-            bytes32 salt,
-            address trader
-        );
+    function changeManager(address newManager) external;
 }
