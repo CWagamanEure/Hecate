@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {Ownable} from "openzeppelin/access/Ownable.sol";
+import {Ownable} from "@openzeppelin/access/Ownable.sol";
 import {OrderStore} from "../../src/OrderStore.sol";
 import {IOrderStore} from "../../src/interfaces/IOrderStore.sol";
 import {OrderTypes as OT} from "../../src/types/OrderTypes.sol";

@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Ownable} from "openzeppelin/access/Ownable.sol";
+import {Ownable} from "@openzeppelin/access/Ownable.sol";
 import {OrderTypes as OT} from "./types/OrderTypes.sol";
 import {PermitTypes as PT} from "./types/PermitTypes.sol";
 import {OrderHashLib as OHL} from "./libraries/OrderHashLib.sol";
@@ -100,8 +100,7 @@ contract OrderStore is IOrderStore, Ownable {
 
     //--------------------Admin--------------
     function changeManager(address newManager) public onlyOwner addressZero(newManager) {
-        address temp = manager;
+        emit ManagerUpdated(manager, newManager);
         manager = newManager;
-        emit ManagerUpdated(temp, newManager);
     }
 }

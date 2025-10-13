@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {OrderTypes as OT} from "./types/OrderTypes.sol";
 import {PermitTypes as PT} from "./types/PermitTypes.sol";
-import {Ownable} from "openzeppelin/access/Ownable.sol";
+import {Ownable} from "@openzeppelin/access/Ownable.sol";
 import {ReentrancyGuard} from "solady/utils/ReentrancyGuard.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {PermitExecutor} from "./libraries/PermitExecutor.sol";

@@ -75,4 +75,11 @@ library OrderTypes {
         address bondToken;
         uint96 bondAmount;
     }
+
+    struct BatchSnapshot {
+        uint256 priceX18;
+        uint64 feedUpdatedAt;
+        uint64 frozenAt;
+        bool frozen;
+    }
 }

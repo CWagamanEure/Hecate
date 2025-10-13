@@ -2,13 +2,14 @@
 pragma solidity ^0.8.20;
 
 import {PermitTypes as PT} from "./types/PermitTypes.sol";
-import {ECDSA} from "openzeppelin/utils/cryptography/ECDSA.sol";
+import {ECDSA} from "@openzeppelin/utils/cryptography/ECDSA.sol";
 import {OrderTypes as OT} from "./types/OrderTypes.sol";
 import {OrderStore} from "./OrderStore.sol";
 import {IOrderStore} from "./interfaces/IOrderStore.sol";
 import {OrderHashLib as OHL} from "./libraries/OrderHashLib.sol";
-import {Ownable} from "openzeppelin/access/Ownable.sol";
+import {Ownable} from "@openzeppelin/access/Ownable.sol";
 import {IBondVault} from "./interfaces/IBondVault.sol";
+import {IPriceGuard} from "./interfaces/IPriceGuard.sol";
 
 contract CrossingManager is Ownable {
     string public constant NAME = "HECATEX";
@@ -18,6 +19,7 @@ contract CrossingManager is Ownable {
 
     IOrderStore public immutable STORE;
     IBondVault public immutable BOND;
+    IPriceGuard public immutable PRICE_GUARD;
 
     mapping(OT.PairId => OT.BatchConfig) public cfg;
 
@@ -37,6 +39,7 @@ contract CrossingManager is Ownable {
     error CrossingManager__PairAlreadyExists();
     error CrossingManager__AddressZero();
     error CrossingManager__WrongTokenPermit();
+    error CrossingManager__PriceStale();
 
     //--------Modifiers-----------------------
     modifier addressZero(address input) {
@@ -45,13 +48,12 @@ contract CrossingManager is Ownable {
     }
 
     //--------------Constructor-----------------------
-    constructor(string memory _version, address store_, address bonds_, address vault_, address pg_)
-        Ownable(msg.sender)
-    {
+    constructor(string memory _version, address store_, address bonds_, address guard_) Ownable(msg.sender) {
         s_version = _version;
 
         STORE = IOrderStore(store_);
         BOND = IBondVault(bonds_);
+        PRICE_GUARD = IPriceGuard(guard_);
         _CACHED_DOMAIN_SEPARATOR = OHL.makeDomainSeparator(NAME, _version, address(this), block.chainid);
     }
 
@@ -147,6 +149,13 @@ contract CrossingManager is Ownable {
     function clear(OT.PairId pairId) external {
         (OT.BatchId bid,, OT.Phase phase) = getCurrentBatch(pairId);
         if (phase != OT.Phase.CLEAR) revert CrossingManager__NotClearPhase();
+        OT.BatchConfig memory batchConfig = cfg[pairId];
+
+        (uint256 px, uint256 ts) = PRICE_GUARD.currentMid(pairId);
+
+        if (block.timestamp - ts > batchConfig.staleSecs) {
+            revert CrossingManager__PriceStale();
+        }
     }
 
     function cancelCommit(OT.PairId pairId, OT.CommitId commitId) public {

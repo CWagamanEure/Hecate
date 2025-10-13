@@ -29,7 +29,7 @@ contract CrossingManagerTest is Test {
 
     function setUp() public {
         store = new OrderStore(address(0xdead));
-        cm = new CrossingManager("1", address(store), bondsMock, vault, pg);
+        cm = new CrossingManager("1", address(store), bondsMock, pg);
 
         vm.prank(store.owner());
         store.changeManager(address(cm));

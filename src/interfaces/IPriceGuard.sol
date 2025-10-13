@@ -1,14 +1,28 @@
-//SPDX-License-Identifier:MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {AggregatorV3Interface} from "@chainlink/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {OrderTypes as OT} from "../types/OrderTypes.sol";
 
 interface IPriceGuard {
-    function snapshotMidPrice(OT.PairId pairId) external returns (uint256 priceX18, uint256 updatedAt);
+    //---------------Views-------------------
+    /// @notice Current manager address
+    function manager() external view returns (address);
 
-    function currentMid(OT.PairId pairId) external returns (uint256 priceX18, uint256 updatedAt);
+    /// @notice Accessor for public mapping `feeds`
+    /// @dev Returns the configured Chainlink aggregators for a PairId
+    function feeds(OT.PairId pid)
+        external
+        view
+        returns (AggregatorV3Interface baseAgg, AggregatorV3Interface quoteAgg);
 
-    function isFresh(uint256 updatedAt, uint256 staleSecs) external pure returns (bool);
+    /// @notice Get current mid price (1e18 scaled) and last update timestamp
+    function currentMid(OT.PairId pid) external view returns (uint256 pxX18, uint256 updatedAt);
 
-    function withinDev(uint256 px, uint256 ref, uint256 maxDevBps) external pure returns (bool);
+    //---------------Mutators----------------
+    /// @notice Owner-only: change the manager address
+    function changeManager(address newManager) external;
+
+    /// @notice Owner-only: set Chainlink USD feeds for a base/quote token pair
+    function setFeeds(address baseToken, address quoteToken, address baseUsdAgg, address quoteUsdAgg) external;
 }
