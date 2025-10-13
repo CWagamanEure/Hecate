@@ -32,6 +32,21 @@ library OrderTypes {
         bytes32 salt;
     }
 
+    struct Commitment {
+        address trader;
+        BatchId batchId;
+        bytes32 commitmentHash;
+        bool cancelled;
+        bool revealed;
+        bool executed;
+        bool slashed;
+    }
+
+    struct RevealedOrder {
+        CommitId commitId;
+        Order order;
+    }
+
     struct Match {
         address buyer;
         address seller;

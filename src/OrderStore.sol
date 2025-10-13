@@ -8,28 +8,15 @@ import {OrderHashLib as OHL} from "./libraries/OrderHashLib.sol";
 
 contract OrderStore is Ownable {
     //-------Structs---------------
-    struct Commitment {
-        address trader;
-        OT.BatchId batchId;
-        bytes32 commitmentHash;
-        bool cancelled;
-        bool revealed;
-        bool executed;
-        bool slashed;
-    }
 
-    struct RevealedOrder {
-        OT.CommitId commitId;
-        OT.Order order;
-    }
     //----------variables--------
 
     address public manager;
 
     //commitId to Commitment
-    mapping(OT.CommitId => Commitment) public commits;
+    mapping(OT.CommitId => OT.Commitment) public commits;
     //commitId to RevealedOrder
-    mapping(OT.CommitId => RevealedOrder) public reveals;
+    mapping(OT.CommitId => OT.RevealedOrder) public reveals;
 
     //---------Events------------------
     event ManagerUpdated(address indexed oldManager, address indexed newManager);
@@ -71,7 +58,7 @@ contract OrderStore is Ownable {
         returns (OT.CommitId)
     {
         OT.CommitId commitId = OHL.commitIdOf(_trader, _batchId, _commitmentHash);
-        commits[commitId] = Commitment({
+        commits[commitId] = OT.Commitment({
             trader: _trader,
             batchId: _batchId,
             commitmentHash: _commitmentHash,
@@ -85,18 +72,18 @@ contract OrderStore is Ownable {
     }
 
     function reveal(OT.CommitId commitId, OT.Order calldata o) external onlyManager {
-        Commitment storage c = commits[commitId];
+        OT.Commitment storage c = commits[commitId];
         if (c.revealed == true || c.executed == true || c.slashed == true || c.cancelled == true) {
             revert OrderStore__RestrictedCommitment();
         }
         c.revealed = true;
-        reveals[commitId] = RevealedOrder({commitId: commitId, order: o});
+        reveals[commitId] = OT.RevealedOrder({commitId: commitId, order: o});
 
         emit Revealed(OT.CommitId.unwrap(commitId));
     }
 
     function cancelCommit(address trader, OT.CommitId commitId) external onlyManager {
-        Commitment storage commitment = commits[commitId];
+        OT.Commitment storage commitment = commits[commitId];
         if (commitment.trader != trader) revert OrderStore__CallerNotTrader();
         if (commitment.cancelled || commitment.revealed || commitment.executed) {
             revert OrderStore__BadState();
@@ -106,7 +93,7 @@ contract OrderStore is Ownable {
     }
 
     //----------------View---------------
-    function getCommited(OT.CommitId commitId) public view returns (Commitment memory) {
+    function getCommited(OT.CommitId commitId) public view returns (OT.Commitment memory) {
         return commits[commitId];
     }
 

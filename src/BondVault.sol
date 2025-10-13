@@ -143,14 +143,6 @@ contract BondVault is Ownable, ReentrancyGuard {
         emit BondSlashed(OT.CommitId.unwrap(commitId), sink, b.amount, reason);
     }
 
-    function setClaimableBatch(OT.CommitId[] calldata ids, bool on) external onlyManager {
-        uint256 n = ids.length;
-        for (uint256 i; i < n; i++) {
-            claimable[ids[i]] = on;
-            emit BondClaimable(OT.CommitId.unwrap(ids[i]), on);
-        }
-    }
-
     function setClaimable(OT.CommitId cid, bool on) external onlyManager {
         claimable[cid] = on;
         emit BondClaimable(OT.CommitId.unwrap(cid), on);
