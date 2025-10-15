@@ -26,26 +26,6 @@ are used to hide orderflow from a standard exchange, used if a trader would rath
 - Create the "Darks Pools" for the EVM
 
 
-
-## Architecture:
-
-=========================================================================
-Users Manager PriceGuard OrderStore BondVault MatchingEngine
-| commit(hash, bond) | | | | |
-|--------------------->| | | store commitment | lock bond |
-| | | |<--------------------|<----------------|
-| (optional) cancel | | | cancel if allowed | refund bond |
-|--------------------->| | |-------------------->|---------------->|
-| reveal(order, sig) | | verify+emit event | verify against hash| |
-|--------------------->| |------------------->|-------------------->| |
-| | clear(batchId) | mid = guarded mid | | | compute fills
-| |---------------------->| staleness+deviation checks | |
-| | |<------------------------------------------| |
-| | | | | | settle
-| claim() | | | mark claimable | release tokens |
-|<---------------------| | |--------------------->|---------------->|
-=========================================================================
-
 ## Contracts and Responsibilities
 
 ### CrossingManager
