@@ -20,6 +20,7 @@ contract BondVault is IBondVault, Ownable, ReentrancyGuard {
     mapping(OT.CommitId => bool) public claimable;
 
     //-------------Events--------------------------
+    event SlashRecipientUpdated(address indexed newRecipient, address indexed oldRecipient);
     event ManagerUpdated(address indexed oldManager, address indexed newManager);
     event BondLocked(bytes32 commitId, address indexed trader);
     event BondClaimable(bytes32 indexed commitId, bool on);
@@ -27,6 +28,7 @@ contract BondVault is IBondVault, Ownable, ReentrancyGuard {
     event BondSlashed(bytes32 commitId, address sink, uint256 amount, uint8 reason);
     //--------------Errors----------------------
 
+    error BondVault__AddressZero();
     error BondVault__NotTrader();
     error BondVault__NotManager();
     error BondVault__BadState();
@@ -37,9 +39,17 @@ contract BondVault is IBondVault, Ownable, ReentrancyGuard {
         _;
     }
 
+    modifier addressZero(address addy) {
+        if (addy == address(0)) revert BondVault__AddressZero();
+        _;
+    }
+
     //-------------Constructor------------------
 
-    constructor(address _manager, address _slashRecipient, address _permit2) Ownable(msg.sender) {
+    constructor(address _manager, address _slashRecipient, address _permit2)
+        addressZero(_manager)
+        Ownable(msg.sender)
+    {
         manager = _manager;
         s_slashRecipient = _slashRecipient;
         PERMIT2 = _permit2;
@@ -81,13 +91,16 @@ contract BondVault is IBondVault, Ownable, ReentrancyGuard {
 
     //-----------Admin---------------------
 
-    function changeManager(address newManager) external onlyOwner {
+    function changeManager(address newManager) external onlyOwner addressZero(newManager) {
         address temp = manager;
         manager = newManager;
         emit ManagerUpdated(temp, newManager);
     }
 
-    function setSlashRecipient(address recipient) external onlyOwner {}
+    function setSlashRecipient(address newRecipient) external onlyOwner addressZero(newRecipient) {
+        emit SlashRecipientUpdated(newRecipient, s_slashRecipient);
+        s_slashRecipient = newRecipient;
+    }
 
     //---------Manager-----------------------
 

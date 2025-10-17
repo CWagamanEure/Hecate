@@ -162,6 +162,7 @@ contract CrossingManager is Ownable {
         (OT.BatchId bid,, OT.Phase phase) = getCurrentBatch(pairId);
         if (phase != OT.Phase.COMMIT) revert CrossingManager__NotCommitPhase();
         STORE.cancelCommit(msg.sender, commitId);
+        BOND.setClaimable(commitId, true);
     }
 
     //-------------------Admin-------------------

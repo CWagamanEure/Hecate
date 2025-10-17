@@ -6,9 +6,6 @@ import {PermitTypes as PT} from "../types/PermitTypes.sol";
 
 interface IBondVault {
     // -------- Views --------
-    function manager() external view returns (address);
-
-    function PERMIT2() external view returns (address);
 
     function getBond(OT.CommitId commitId) external view returns (OT.Bond memory);
 
