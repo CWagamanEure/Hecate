@@ -7,21 +7,18 @@ import {IPriceGuard} from "./interfaces/IPriceGuard.sol";
 import {OrderTypes as OT} from "./types/OrderTypes.sol";
 import {OrderHashLib as OHL} from "./libraries/OrderHashLib.sol";
 import {Ownable} from "@openzeppelin/access/Ownable.sol";
+import {ChainlinkFeedResolver as CFR} from "./ChainlinkFeedResolver.sol";
 
 contract PriceGuard is IPriceGuard, Ownable {
-    //--------------Structs----------------
-    struct PairFeed {
-        AggregatorV3Interface baseAgg;
-        AggregatorV3Interface quoteAgg;
-    }
     //----------------Variables-----------------
 
     address public manager;
-    mapping(OT.PairId => PairFeed) public feeds;
+    CFR public immutable FEED_RESOLVER;
+    mapping(OT.PairId => AggregatorV3Interface) public feeds;
 
     //---------------Events-----------------
     event ManagerUpdated(address indexed oldManager, address indexed newManager);
-    event FeedsSet(bytes32 indexed pairId, address baseAgg, address quoteAgg);
+    event FeedsSet(bytes32 indexed pairId, address agg);
 
     //---------------Errors------------------
     error PriceGuard__AddressZero();
@@ -42,9 +39,11 @@ contract PriceGuard is IPriceGuard, Ownable {
     }
 
     //---------------Constructor----------------
-    constructor(address _manager) Ownable(msg.sender) {
+    constructor(address _manager, address registry) Ownable(msg.sender) {
         if (_manager == address(0)) revert PriceGuard__AddressZero();
         manager = _manager;
+        FEED_RESOLVER = CFR(registry);
+
         emit ManagerUpdated(address(0), _manager);
     }
 
@@ -55,20 +54,18 @@ contract PriceGuard is IPriceGuard, Ownable {
         manager = newManager;
     }
 
-    function setFeeds(address baseToken, address quoteToken, address baseUsdAgg, address quoteUsdAgg)
-        external
-        onlyOwner
-        addressZero(baseUsdAgg, quoteUsdAgg)
-    {
+    function setFeed(address baseToken, address quoteToken) external onlyOwner {
         OT.PairId pid = OHL.pairIdOf(OT.Pair({base: baseToken, quote: quoteToken}));
-        feeds[pid] =
-            PairFeed({baseAgg: AggregatorV3Interface(baseUsdAgg), quoteAgg: AggregatorV3Interface(quoteUsdAgg)});
-        emit FeedsSet(OT.PairId.unwrap(pid), baseUsdAgg, quoteUsdAgg);
+        address agg = FEED_RESOLVER.resolveAgg(baseToken, quoteToken);
+        if (agg == address(0)) revert PriceGuard__AddressZero();
+        AggregatorV3Interface v3 = AggregatorV3Interface(agg);
+        feeds[pid] = v3;
+        emit FeedsSet(OT.PairId.unwrap(pid), agg);
     }
 
     function currentMid(OT.PairId pid) public view returns (uint256 pxX18, uint256 updatedAt) {
-        PairFeed storage pf = feeds[pid];
-        if (address(pf.baseAgg) == address(0) || address(pf.quoteAgg) == address(0)) revert PriceGuard__FeedsNotSet();
-        (pxX18, updatedAt) = PCL.getCurrentMid(pf.baseAgg, pf.quoteAgg);
+        AggregatorV3Interface v3 = feeds[pid];
+        if (address(feeds[pid]) == address(0)) revert PriceGuard__FeedsNotSet();
+        (pxX18, updatedAt) = PCL.getCurrentMid(v3);
     }
 }

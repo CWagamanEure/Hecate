@@ -5,9 +5,6 @@ import {OrderTypes as OT} from "../types/OrderTypes.sol";
 import {PermitTypes as PT} from "../types/PermitTypes.sol";
 
 interface IOrderStore {
-    // -------- Views --------
-    function manager() external view returns (address);
-
     // Note: returns the full Commitment struct
     function getCommited(OT.CommitId commitId) external view returns (OT.Commitment memory);
 

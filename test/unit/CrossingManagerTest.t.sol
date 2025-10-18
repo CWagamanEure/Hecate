@@ -8,14 +8,16 @@ import {OrderTypes as OT} from "../../src/types/OrderTypes.sol";
 import {PermitTypes as PT} from "../../src/types/PermitTypes.sol";
 import {OrderHashLib as OHL} from "../../src/libraries/OrderHashLib.sol";
 import {MockBondVault} from "../mocks/MockBondVault.sol";
+import {MockPriceGuard} from "../mocks/MockPriceGuard.sol";
+import {MockOrderStore} from "../mocks/MockOrderStore.sol";
 
 contract CrossingManagerTest is Test {
     CrossingManager cm;
-    OrderStore store;
+    MockOrderStore storeMock;
+    MockPriceGuard pgMock;
+    MockBondVault bondsMock;
 
-    address bondsMock = address(new MockBondVault());
     address vault = makeAddr("vault");
-    address pg = makeAddr("pg");
 
     address owner = address(this);
     address trader = makeAddr("trader");
@@ -28,11 +30,18 @@ contract CrossingManagerTest is Test {
     OT.PairId pairId;
 
     function setUp() public {
-        store = new OrderStore(address(0xdead));
-        cm = new CrossingManager("1", address(store), bondsMock, pg);
+        storeMock = new MockOrderStore(address(this));
+        bondsMock = new MockBondVault(address(this));
+        pgMock = new MockPriceGuard(address(this));
+        cm = new CrossingManager("1", address(storeMock), address(bondsMock), address(pgMock));
+        vm.startPrank(owner);
+        storeMock.changeManager(address(cm));
+        bondsMock.changeManager(address(cm));
+        pgMock.changeManager(address(cm));
+        vm.stopPrank();
 
-        vm.prank(store.owner());
-        store.changeManager(address(cm));
+        vm.prank(storeMock.owner());
+        storeMock.changeManager(address(cm));
 
         OT.BatchConfig memory bc = OT.BatchConfig({
             exists: true,
@@ -98,7 +107,7 @@ contract CrossingManagerTest is Test {
         vm.prank(trader);
         OT.CommitId cid = cm.commit(pairId, keccak256("commitment"), p);
 
-        (address tr,,,,,,) = store.commits(cid);
+        (address tr,,,,,,) = storeMock.commits(cid);
         assertEq(tr, trader, "trader should be recorded in store");
     }
 
@@ -144,7 +153,7 @@ contract CrossingManagerTest is Test {
 
         vm.prank(trader);
         cm.reveal(cid, pairId, o);
-        (,,,, bool revealed,,) = store.commits(cid);
+        (,,,, bool revealed,,) = storeMock.commits(cid);
         assertTrue(revealed);
     }
 
@@ -160,7 +169,7 @@ contract CrossingManagerTest is Test {
 
         vm.prank(trader);
         cm.cancelCommit(pairId, cid);
-        (,,, bool cancelled,,,) = store.commits(cid);
+        (,,, bool cancelled,,,) = storeMock.commits(cid);
         assertTrue(cancelled);
 
         (, uint64 idx,) = cm.getCurrentBatch(pairId);

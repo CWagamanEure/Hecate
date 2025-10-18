@@ -22,10 +22,13 @@ contract CrossingManager is Ownable {
     IPriceGuard public immutable PRICE_GUARD;
 
     mapping(OT.PairId => OT.BatchConfig) public cfg;
+    mapping(OT.PairId => OT.BatchSnapshot) public snapshots;
 
     //-----------Events--------------------
     event Commited(bytes32, bytes32, address);
     event Revealed(bytes32, bytes32, address);
+    event PairListed(address indexed base, address indexed quote);
+    event FeedUpdated(uint256 pxX18, uint256 updatedAt);
 
     //-----------Errors-----------------
     error CrossingManager__CommitIdsDontMatch();
@@ -158,11 +161,17 @@ contract CrossingManager is Ownable {
         }
     }
 
-    function cancelCommit(OT.PairId pairId, OT.CommitId commitId) public {
+    function cancelCommit(OT.PairId pairId, OT.CommitId commitId) external {
         (OT.BatchId bid,, OT.Phase phase) = getCurrentBatch(pairId);
         if (phase != OT.Phase.COMMIT) revert CrossingManager__NotCommitPhase();
         STORE.cancelCommit(msg.sender, commitId);
         BOND.setClaimable(commitId, true);
+    }
+
+    function updateFeed(OT.PairId pairId) external {
+        (uint256 pxX18, uint256 updatedAt) = PRICE_GUARD.currentMid(pairId);
+        snapshots[pairId] = OT.BatchSnapshot(pxX18, updatedAt);
+        emit FeedUpdated(pxX18, updatedAt);
     }
 
     //-------------------Admin-------------------
@@ -176,7 +185,8 @@ contract CrossingManager is Ownable {
         OT.PairId pairId = OHL.pairIdOf(OT.Pair(base, quote));
         if (cfg[pairId].exists) revert CrossingManager__PairAlreadyExists();
         batchConfig.exists = true;
-
         cfg[pairId] = batchConfig;
+        PRICE_GUARD.setFeed(base, quote);
+        emit PairListed(base, quote);
     }
 }

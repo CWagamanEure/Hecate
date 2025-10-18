@@ -78,8 +78,6 @@ library OrderTypes {
 
     struct BatchSnapshot {
         uint256 priceX18;
-        uint64 feedUpdatedAt;
-        uint64 frozenAt;
-        bool frozen;
+        uint256 feedUpdatedAt;
     }
 }
