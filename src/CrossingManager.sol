@@ -154,11 +154,15 @@ contract CrossingManager is Ownable {
         if (phase != OT.Phase.CLEAR) revert CrossingManager__NotClearPhase();
         OT.BatchConfig memory batchConfig = cfg[pairId];
 
+        // Price Guard fetching current Mid
         (uint256 px, uint256 ts) = PRICE_GUARD.currentMid(pairId);
 
+        // Check to see if price too stale for batchConfig requirement
         if (block.timestamp - ts > batchConfig.staleSecs) {
             revert CrossingManager__PriceStale();
         }
+        OT.Match[] memory matches = STORE.clear(bid);
+        uint256 mS = matches.length;
     }
 
     function cancelCommit(OT.PairId pairId, OT.CommitId commitId) external {

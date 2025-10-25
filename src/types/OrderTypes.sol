@@ -56,11 +56,9 @@ library OrderTypes {
     }
 
     struct Match {
-        address buyer;
-        address seller;
-        uint256 price;
-        uint256 sizeBase;
-        Pair pair;
+        CommitId buyerCommitId;
+        CommitId sellerCommitId;
+        uint256 baseFilled;
     }
 
     struct BatchConfig {

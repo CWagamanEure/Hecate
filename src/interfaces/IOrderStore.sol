@@ -13,6 +13,8 @@ interface IOrderStore {
 
     function reveal(OT.CommitId commitId, OT.Order calldata o) external;
 
+    function clear(OT.BatchId bid) external returns (OT.Match[] memory);
+
     function cancelCommit(address trader, OT.CommitId commitId) external;
 
     function changeManager(address newManager) external;

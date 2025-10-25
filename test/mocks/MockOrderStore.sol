@@ -88,6 +88,10 @@ contract MockOrderStore is IOrderStore, Ownable {
         emit Revealed(OT.CommitId.unwrap(commitId));
     }
 
+    function clear(OT.BatchId) external onlyManager returns (OT.Match[] memory) {
+        return new OT.Match[](0);
+    }
+
     function cancelCommit(address trader, OT.CommitId commitId) external onlyManager {
         OT.Commitment storage c = commits[commitId];
 
