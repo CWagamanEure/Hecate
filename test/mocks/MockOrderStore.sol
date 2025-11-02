@@ -20,7 +20,10 @@ contract MockOrderStore is IOrderStore, Ownable {
     mapping(OT.CommitId => OT.RevealedOrder) public reveals;
 
     // -------- Events (match real) --------
-    event ManagerUpdated(address indexed oldManager, address indexed newManager);
+    event ManagerUpdated(
+        address indexed oldManager,
+        address indexed newManager
+    );
     event Committed(bytes32 commitId);
     event CommitmentCancelled(bytes32 commitId, address trader);
     event Revealed(bytes32 commitId);
@@ -54,12 +57,16 @@ contract MockOrderStore is IOrderStore, Ownable {
 
     // -------- IOrderStore API (mirrors real) --------
 
-    function commit(address _trader, OT.BatchId _batchId, bytes32 _commitmentHash)
-        external
-        onlyManager
-        returns (OT.CommitId)
-    {
-        OT.CommitId commitId = OHL.commitIdOf(_trader, _batchId, _commitmentHash);
+    function commit(
+        address _trader,
+        OT.BatchId _batchId,
+        bytes32 _commitmentHash
+    ) external onlyManager returns (OT.CommitId) {
+        OT.CommitId commitId = OHL.commitIdOf(
+            _trader,
+            _batchId,
+            _commitmentHash
+        );
 
         commits[commitId] = OT.Commitment({
             trader: _trader,
@@ -75,7 +82,10 @@ contract MockOrderStore is IOrderStore, Ownable {
         return commitId;
     }
 
-    function reveal(OT.CommitId commitId, OT.Order calldata o) external onlyManager {
+    function reveal(
+        OT.CommitId commitId,
+        OT.Order calldata o
+    ) external onlyManager {
         OT.Commitment storage c = commits[commitId];
 
         if (c.revealed || c.executed || c.slashed || c.cancelled) {
@@ -88,11 +98,16 @@ contract MockOrderStore is IOrderStore, Ownable {
         emit Revealed(OT.CommitId.unwrap(commitId));
     }
 
-    function clear(OT.BatchId) external onlyManager returns (OT.Match[] memory) {
+    function clear(
+        OT.BatchId
+    ) external onlyManager returns (OT.Match[] memory) {
         return new OT.Match[](0);
     }
 
-    function cancelCommit(address trader, OT.CommitId commitId) external onlyManager {
+    function cancelCommit(
+        address trader,
+        OT.CommitId commitId
+    ) external onlyManager {
         OT.Commitment storage c = commits[commitId];
 
         if (c.trader != trader) revert OrderStore__CallerNotTrader();
@@ -105,12 +120,16 @@ contract MockOrderStore is IOrderStore, Ownable {
     }
 
     // -------- Views (helper parity) --------
-    function getCommited(OT.CommitId commitId) external view returns (OT.Commitment memory) {
+    function getCommited(
+        OT.CommitId commitId
+    ) external view returns (OT.Commitment memory) {
         return commits[commitId];
     }
 
     // -------- Admin (parity with real) --------
-    function changeManager(address newManager) external onlyOwner addressZero(newManager) {
+    function changeManager(
+        address newManager
+    ) external onlyOwner addressZero(newManager) {
         emit ManagerUpdated(manager, newManager);
         manager = newManager;
     }

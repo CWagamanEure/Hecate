@@ -63,6 +63,22 @@ less precise price formation.
 meaningful.
 - Griefing bonds
 
+## Asymmetric Information in a Pseudonymous Market
+Block trades, in CeFi, are only feasible, and supplied the liquidity they seek, if they can 
+adequately prove that they are uninformed in their desires to trade. As a result, these sort
+of markets rely heavily on trust, which requires a system where liquidity suppliers can 
+keep a record of who has tainted their name by lying about their intents. In a completely
+anonymous market, participants will lie about their motivations, as that is the winning strategy.
+### How does this tie into DeFi?
+DeFi markets are pseudonymous, where addresses and transaction history are public information,
+but the means of creating a new identity is also easily accesible. Because EVM identities 
+are cheaply replaceable, reputation alone cannot sustain a crossing network that clears large,
+potentially informed orders. Hecate therefore introduces mechanical substitutes for trust. 
+This takes the form of a commit-reveal functionality, which hides intent. Batch clearing at
+an oracle midpoint also helps to reduce the payoff of being first. Per-order bonds also 
+make Sybil griefing costly. In these ways, Hecate is able to trade speed for bounded
+adverse selection rather than for perfect informational symmetry.
+
 ## Roadmap
 - Add TWAP mid and multi-feed quorom
 - Intent style inclusion lists compatability
