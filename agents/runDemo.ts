@@ -62,6 +62,7 @@ export type RunDemoOptions = {
   verbose: boolean;
   saveBundle: string | undefined;
   allowDigestMismatch: boolean;
+  includeFailureFixture: boolean;
 };
 
 export type RunDemoResult = { ok: true } | { ok: false; error: string };
@@ -159,6 +160,21 @@ async function loadFixtures(): Promise<AgentFixture[]> {
     const raw = await readFile(join(FIXTURE_DIR, f), "utf-8");
     const parsed = AgentFixture.parse(JSON.parse(raw));
     out.push(parsed);
+  }
+  return out;
+}
+
+const FAILURE_FIXTURE_FILES = [
+  "agentE-fail.json",
+  "agentF-fail.json",
+  "agentG-fail.json"
+] as const;
+
+async function loadFailureFixtures(): Promise<AgentFixture[]> {
+  const out: AgentFixture[] = [];
+  for (const f of FAILURE_FIXTURE_FILES) {
+    const raw = await readFile(join(FIXTURE_DIR, f), "utf-8");
+    out.push(AgentFixture.parse(JSON.parse(raw)));
   }
   return out;
 }
@@ -606,12 +622,208 @@ export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
       }
     }
 
+    if (opts.includeFailureFixture) {
+      await runFailureModeBatch({
+        baseUrl: opts.baseUrl,
+        enclaveKey,
+        engineAddress: att.engine_address,
+        runId
+      });
+    }
+
     console.log("\n✓ demo complete: every expected outcome matched\n");
     return { ok: true };
   } catch (e) {
     const msg = (e as Error).message;
     console.log(`\n× ${msg}\n`);
     return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Optional failure-mode batch. Runs after the canonical demo. Three new
+ * fixtures (E, F, G) are designed to mix MIN_FILL_NOT_MET (when the
+ * matcher's allocation can't satisfy an active intent's min) with
+ * INSUFFICIENT_OPPOSITE_FLOW_WITHIN_LIMIT (when an intent's limit doesn't
+ * cross any candidate price).
+ *
+ * The batch closes successfully — the matcher correctly refused to match —
+ * and the resulting bundle still verifies. The point is to demonstrate the
+ * engine's per-intent failure-reason discrimination, not engine misbehavior.
+ */
+async function runFailureModeBatch(args: {
+  baseUrl: string;
+  enclaveKey: Uint8Array;
+  engineAddress: HexAddress;
+  runId: number;
+}): Promise<void> {
+  const { baseUrl, enclaveKey, engineAddress, runId } = args;
+  const fixtures = await loadFailureFixtures();
+
+  section("Failure-mode batch (optional)");
+  info(
+    "three fixtures crafted to exercise the matcher's per-intent unfilled-reason discrimination"
+  );
+
+  // Deposits.
+  for (const fx of fixtures) {
+    const addr = privateKeyToAddress(fx.private_key);
+    for (const dep of fx.deposits) {
+      await fetchJson(baseUrl, "POST", "/vault/mock-deposit", {
+        agent_id: addr,
+        asset: dep.asset,
+        amount: dep.amount
+      });
+    }
+    ok(
+      `deposited ${fx.deposits
+        .map((d) => `${d.amount} ${d.asset}`)
+        .join(", ")} for ${fx.name} (${addr})`
+    );
+  }
+
+  // Submissions.
+  const submissions: Submission[] = [];
+  for (const [i, fx] of fixtures.entries()) {
+    const addr = privateKeyToAddress(fx.private_key);
+    const intent_id = `intent_${fx.name.replace(/[^A-Za-z0-9_-]/g, "_")}_${runId}_${i}`;
+    const nonce = `${runId}_fail_${i}`;
+    const payload: PrivatePayload = { ...fx.intent, nonce };
+    const ciphertext: HexBytes = mockEncryptPayload(payload, enclaveKey);
+    const unsigned: PublicEnvelopeUnsigned = {
+      intent_id,
+      agent_id: addr,
+      market: "ETH/USDC",
+      expiry_ms: Date.now() + 5 * 60_000,
+      payload_commitment: hashPayload(payload),
+      payload_ciphertext: ciphertext,
+      nonce
+    };
+    const envelope = signEnvelope(unsigned, fx.private_key);
+    const r = await fetchJsonNoThrow(baseUrl, "POST", "/intents", envelope);
+    submissions.push({
+      fixture: fx,
+      agent_id: addr,
+      intent_id,
+      payload,
+      envelope,
+      response: r
+    });
+    if (r.status !== 200 || r.body?.ok !== true) {
+      throw new DemoMismatch(
+        `failure-mode: ${fx.name} expected accepted, got ${r.status} ${r.body?.error?.code}`
+      );
+    }
+    ok(`${fx.name} accepted (intent_id=${intent_id})`);
+  }
+
+  // Close the failure-mode batch.
+  const close = (await fetchJson(baseUrl, "POST", "/batches/close", {
+    batch_id: `batch_${runId}_failure`
+  })) as {
+    ok: boolean;
+    closed: boolean;
+    batch_receipt: {
+      batch_id: string;
+      clearing_price: string;
+      num_matched: number;
+    };
+    fill_receipts: FillReceipt[];
+    batch: unknown;
+    fill_plan: unknown;
+    settlement: unknown;
+    vault_state_before_settlement: unknown;
+    vault_state_after_settlement: unknown;
+    reservation_book_before_settlement: unknown;
+    reservation_book_after_settlement: unknown;
+  };
+  if (!close.closed) {
+    throw new DemoMismatch("failure-mode: expected batch.closed=true");
+  }
+  ok(
+    `failure-mode batch closed: clearing_price=${close.batch_receipt.clearing_price}, num_matched=${close.batch_receipt.num_matched}`
+  );
+  if (close.batch_receipt.num_matched !== 0) {
+    throw new DemoMismatch(
+      `failure-mode: expected num_matched=0, got ${close.batch_receipt.num_matched}`
+    );
+  }
+
+  const frByIntent = new Map<string, FillReceipt>(
+    close.fill_receipts.map((fr) => [fr.intent_id, fr])
+  );
+  for (const sub of submissions) {
+    const fr = frByIntent.get(sub.intent_id);
+    if (!fr) {
+      throw new DemoMismatch(
+        `failure-mode: ${sub.fixture.name}: no fill receipt`
+      );
+    }
+    const exp = sub.fixture.expected_outcome;
+    if (exp.final_status !== null && fr.status !== exp.final_status) {
+      throw new DemoMismatch(
+        `failure-mode: ${sub.fixture.name}: expected status=${exp.final_status}, got ${fr.status}`
+      );
+    }
+    if (exp.final_filled_base !== null && fr.filled_base !== exp.final_filled_base) {
+      throw new DemoMismatch(
+        `failure-mode: ${sub.fixture.name}: expected filled_base=${exp.final_filled_base}, got ${fr.filled_base}`
+      );
+    }
+    if (
+      exp.expected_unfilled_reason !== undefined &&
+      exp.expected_unfilled_reason !== null &&
+      fr.unfilled_reason !== exp.expected_unfilled_reason
+    ) {
+      throw new DemoMismatch(
+        `failure-mode: ${sub.fixture.name}: expected unfilled_reason=${exp.expected_unfilled_reason}, got ${fr.unfilled_reason}`
+      );
+    }
+    info(
+      `${sub.intent_id} ${fr.status} unfilled_reason=${fr.unfilled_reason}`
+    );
+  }
+
+  // Verify the failure-mode bundle. A correctly-failed batch still produces a
+  // signed receipt that verifies — the integrity story is independent of the
+  // matcher's match/no-match verdict.
+  const verifyPayload = {
+    batchReceipt: close.batch_receipt,
+    fillReceipts: close.fill_receipts,
+    batch: close.batch,
+    fillPlan: close.fill_plan,
+    settlement: close.settlement,
+    vaultStateBeforeSettlement: close.vault_state_before_settlement,
+    vaultStateAfterSettlement: close.vault_state_after_settlement,
+    reservationBookBeforeSettlement: close.reservation_book_before_settlement,
+    reservationBookAfterSettlement: close.reservation_book_after_settlement,
+    expectedEngineAddress: engineAddress
+  };
+  const verify = (await fetchJson(
+    baseUrl,
+    "POST",
+    "/receipts/verify",
+    verifyPayload
+  )) as { ok: boolean; failures?: unknown[]; bundle_id: string };
+  if (!verify.ok) {
+    throw new DemoMismatch(
+      `failure-mode bundle verification failed: ${JSON.stringify(verify.failures)}`
+    );
+  }
+  ok(`failure-mode bundle verified (bundle_id=${verify.bundle_id})`);
+
+  // Final-balance assertions: reservations were RELEASED on a failed batch,
+  // so every fixture's balances should equal exactly what they deposited.
+  section("Failure-mode final balances");
+  for (const fx of fixtures) {
+    const addr = privateKeyToAddress(fx.private_key);
+    const r = (await fetchJson(baseUrl, "GET", `/vault/${addr}`)) as {
+      vault: { balances: { ETH: string; USDC: string } };
+    };
+    info(
+      `${fx.name}: ETH=${r.vault.balances.ETH}, USDC=${r.vault.balances.USDC}`
+    );
+    assertExpectedBalances(fx.name, r.vault.balances, fx.expected_outcome);
   }
 }
 

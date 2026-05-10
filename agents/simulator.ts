@@ -34,6 +34,10 @@ Options:
   --allow-digest-mismatch     do not exit on engine_code_digest != --code-digest
                               (default: hard-fail; mismatched digests break mock encryption
                               and produce MALFORMED_PAYLOAD on every intent)
+  --include-failure-fixture   after the canonical 4-agent demo, run an additional batch
+                              with three fixtures crafted to exercise the matcher's
+                              per-intent unfilled-reason discrimination (mix of
+                              MIN_FILL_NOT_MET and INSUFFICIENT_OPPOSITE_FLOW_WITHIN_LIMIT)
   --verbose                   extra output
   --help                      show this help
 
@@ -50,6 +54,7 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
   let verbose = false;
   let saveBundle: string | undefined;
   let allowDigestMismatch = false;
+  let includeFailureFixture = false;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -75,6 +80,9 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
       case "--allow-digest-mismatch":
         allowDigestMismatch = true;
         break;
+      case "--include-failure-fixture":
+        includeFailureFixture = true;
+        break;
       case "--verbose":
         verbose = true;
         break;
@@ -87,7 +95,16 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
     throw new Error("--reset-demo-state requires --data-dir");
   }
 
-  return { baseUrl, codeDigest, reset, dataDir, verbose, saveBundle, allowDigestMismatch };
+  return {
+    baseUrl,
+    codeDigest,
+    reset,
+    dataDir,
+    verbose,
+    saveBundle,
+    allowDigestMismatch,
+    includeFailureFixture
+  };
 }
 
 function main(): void {

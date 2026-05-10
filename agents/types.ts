@@ -37,7 +37,12 @@ export const AgentExpectedOutcome = z
     final_status: z.string().nullable(),
     final_filled_base: DecimalString.nullable(),
     final_balance_eth: DecimalString.nullable(),
-    final_balance_usdc: DecimalString.nullable()
+    final_balance_usdc: DecimalString.nullable(),
+    // Optional. When the intent ends UNFILLED, the simulator asserts the fill
+    // receipt's unfilled_reason matches this value. Null / omitted when the
+    // intent is filled, partially filled, or rejected (so the canonical
+    // 4-agent fixtures don't need this field).
+    expected_unfilled_reason: z.string().nullable().optional()
   })
   .strict();
 

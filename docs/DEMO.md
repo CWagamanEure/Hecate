@@ -208,6 +208,28 @@ Runs the simulator (saving the bundle), then verifies the honest bundle, then
 runs every tamper scenario with `--expect-fail`. Ends with
 `ALL DEMO SCENARIOS PASSED` if every attack was correctly rejected.
 
+### Failure-mode demo (optional)
+
+```sh
+npm run simulate -- --reset-demo-state --data-dir ./data --include-failure-fixture
+```
+
+Runs the canonical 4-agent demo first, then a second batch with three new
+fixtures (E, F, G) crafted to exercise the matcher's per-intent
+unfilled-reason discrimination:
+
+| Agent | Side | Limit | Min fill | Outcome |
+|---|---|---|---|---|
+| E | BUY 1 ETH | 3500 | 1 | `UNFILLED` — `INSUFFICIENT_OPPOSITE_FLOW_WITHIN_LIMIT` (limit doesn't cross any sell) |
+| F | SELL 5 ETH | 3550 | 5 (AON) | `UNFILLED` — `MIN_FILL_NOT_MET` (active at p=3550 but allocation falls below min) |
+| G | BUY 4 ETH | 3600 | 4 (AON) | `UNFILLED` — `MIN_FILL_NOT_MET` (active at p=3550 but matched sell flow is 0) |
+
+The batch closes successfully (`num_matched=0`), every reservation is
+released, every fixture's balance equals exactly what it deposited, and the
+failure-batch bundle still verifies — the engine signed the correct refusal.
+The point is to demonstrate the engine's per-intent failure-reason
+discrimination, not engine misbehavior.
+
 ### Web verifier panel
 
 While the server is running (`npm run dev`), open

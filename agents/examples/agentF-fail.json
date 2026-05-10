@@ -1,0 +1,26 @@
+{
+  "name": "Agent F (failure-mode)",
+  "private_key": "0x0000000000000000000000000000000000000000000000000000000000000007",
+  "deposits": [{ "asset": "ETH", "amount": "5" }],
+  "intent": {
+    "side": "SELL",
+    "asset_in": "ETH",
+    "asset_out": "USDC",
+    "max_base_amount": "5",
+    "limit_price": "3550",
+    "allow_partial_fill": false,
+    "min_base_fill_amount": "5",
+    "deadline_batches": 3,
+    "max_price_impact_bps": 10000,
+    "fallback_after_batches": null
+  },
+  "expected_outcome": {
+    "accepted": true,
+    "reject_reason": null,
+    "final_status": "UNFILLED",
+    "final_filled_base": "0",
+    "final_balance_eth": "5",
+    "final_balance_usdc": "0",
+    "expected_unfilled_reason": "MIN_FILL_NOT_MET"
+  }
+}
