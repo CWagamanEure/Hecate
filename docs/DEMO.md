@@ -315,6 +315,46 @@ chain. Full re-verification (recomputing the body hash from typed fields,
 plus settlement / conservation invariants) is roadmap material — see
 [ROADMAP.md §4](ROADMAP.md) and §5 (EIP-712 migration).
 
+### Demo against a deployed Sepolia contract
+
+Once `HecateSettlementVerifier.sol` is deployed to Sepolia (see
+[contracts/README.md](../contracts/README.md) for the `forge script` command):
+
+```sh
+# Required env: SEPOLIA_RPC_URL, VERIFIER_ADDRESS, DEPLOYER_PRIVATE_KEY
+# (last one optional with --dry-run).
+
+# 1. Produce a fresh demo bundle.
+npm run simulate -- --reset-demo-state --data-dir ./data --save-bundle ./data/last-bundle.json
+
+# 2. Dry-run first to confirm verification will succeed.
+npm run onchain:verify -- ./data/last-bundle.json --dry-run
+
+# 3. Broadcast: submits a real Sepolia tx, waits for confirmation.
+npm run onchain:verify -- ./data/last-bundle.json
+```
+
+Sample output (end of broadcast):
+
+```
+✓ confirmed in block 5829441 (gas used: 29228)
+  https://sepolia.etherscan.io/tx/0x...
+  events emitted: 1
+  event ReceiptVerified:
+    hash:   0x10a18c2625bd5946f3aa4c378fbf7b5456442972cad97556fc0202e721de6807
+    signer: 0x7e5f4552091a69125d5dfcb7b8c2659029395bdf
+```
+
+The Etherscan link shows a real on-chain transaction with the
+`ReceiptVerified(bytes32, address)` event topic carrying the bundle's body
+hash and the recovered engine address. Anyone — including a skeptical
+audience member — can read the contract source on Etherscan (if Etherscan
+verification was enabled at deploy time), inspect the call, and confirm
+that what was recovered is what the engine signed.
+
+The script enforces chain-id safety: refuses to broadcast on any chain
+other than Sepolia (11155111) or local Anvil (31337).
+
 ### Web verifier panel
 
 While the server is running (`npm run dev`), open

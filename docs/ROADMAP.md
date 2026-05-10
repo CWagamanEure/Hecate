@@ -127,6 +127,15 @@ pass the resulting `bytes32` + 65-byte signature; the contract recovers via
 (9 cases) covers honest verification + tampers + bad inputs. Lives at
 [`contracts/HecateSettlementVerifier.sol`](../contracts/HecateSettlementVerifier.sol).
 
+A Forge deploy script (`contracts/script/Deploy.s.sol`) lets you deploy to
+Sepolia or local anvil. A TS broadcast script
+(`scripts/onchain-verify.ts`, `npm run onchain:verify`) calls
+`verifyAndEmit` against the deployed contract from a real saved bundle,
+emitting an on-chain `ReceiptVerified(bytes32, address)` event. Tested
+end-to-end against local anvil; production Sepolia deploy is one
+`forge script ... --broadcast --verify` command — see
+[contracts/README.md §Deploying](../contracts/README.md#deploying).
+
 ### Full on-chain re-verification (future)
 
 Reproduce `verifyFullBatch` on chain — canonical-JSON hash recomputation

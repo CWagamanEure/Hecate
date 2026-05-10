@@ -67,6 +67,80 @@ npx tsx scripts/gen-onchain-fixture.ts --bundle ./data/last-bundle.json
 
 ---
 
+## Deploying
+
+### Local anvil (development; no real funds)
+
+```sh
+# In terminal 1: start a local node.
+anvil
+
+# In terminal 2: deploy. anvil's first default key is well-known and
+# pre-funded with 10000 ETH on the local chain.
+cd contracts
+forge script script/Deploy.s.sol \
+  --rpc-url http://localhost:8545 \
+  --broadcast \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
+# Note the deployed address from the script output.
+
+# Verify a real Hecate bundle on the local deployment:
+cd ..
+SEPOLIA_RPC_URL=http://127.0.0.1:8545 \
+VERIFIER_ADDRESS=<deployed-address> \
+DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  npm run onchain:verify -- ./data/last-bundle.json
+```
+
+### Sepolia (production demo)
+
+Prerequisites:
+- A Sepolia RPC URL (free from Alchemy, Infura, or a public provider).
+- A deployer wallet with ~0.005 Sepolia ETH (any Sepolia faucet covers this).
+- An Etherscan API key (free, optional but recommended — enables source-code
+  verification on Etherscan so the deployed contract is human-readable).
+
+```sh
+export SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/<your-key>
+export DEPLOYER_PRIVATE_KEY=0x...
+export ETHERSCAN_API_KEY=...
+
+cd contracts
+forge script script/Deploy.s.sol \
+  --rpc-url $SEPOLIA_RPC_URL \
+  --broadcast \
+  --verify \
+  --etherscan-api-key $ETHERSCAN_API_KEY \
+  --private-key $DEPLOYER_PRIVATE_KEY
+```
+
+Record the deployed address. Then run on-chain verification of a real
+Hecate bundle:
+
+```sh
+export VERIFIER_ADDRESS=0x...   # from the forge script output
+cd ..
+npm run simulate -- --reset-demo-state --data-dir ./data --save-bundle ./data/last-bundle.json
+npm run onchain:verify -- ./data/last-bundle.json
+```
+
+The script prints the Sepolia tx hash plus a `https://sepolia.etherscan.io/tx/...`
+link. Following the link shows the `ReceiptVerified(bytes32 indexed hash,
+address indexed signer)` event with the bundle's body hash and the engine
+address.
+
+`--dry-run` simulates via `eth_call` only (no tx, no gas spent):
+
+```sh
+npm run onchain:verify -- ./data/last-bundle.json --dry-run
+```
+
+The script enforces chain-id safety: it refuses to broadcast on any chain
+other than Sepolia (11155111) or local Anvil (31337).
+
+---
+
 ## v1 caveats
 
 - **Signature scheme is v1-local, not wallet UX.** The engine signs a

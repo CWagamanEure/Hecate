@@ -22,7 +22,8 @@
     "docker:smoke": "bash scripts/docker-smoke.sh",
     "docker:smoke-amd64": "bash scripts/docker-smoke-amd64.sh",
     "eigen:preflight": "bash scripts/eigen-preflight.sh",
-    "eigen:attest-check": "bash scripts/eigen-attest-check.sh"
+    "eigen:attest-check": "bash scripts/eigen-attest-check.sh",
+    "onchain:verify": "tsx scripts/onchain-verify.ts"
   },
   "dependencies": {
     "@noble/hashes": "^1.5.0",
