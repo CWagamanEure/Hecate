@@ -25,11 +25,11 @@ Requires [Foundry](https://book.getfoundry.sh/) (`foundryup`).
 
 ```sh
 cd contracts
-forge install foundry-rs/forge-std --no-commit   # first time only
+forge install foundry-rs/forge-std    # first time only
 forge test -vv
 ```
 
-Expected: **8 tests pass**, including
+Expected: **9 tests pass**, including
 - `test_verifyHonestReceipt`
 - `test_recoverSignerReturnsEngine`
 - `test_rejectsWrongEngine`

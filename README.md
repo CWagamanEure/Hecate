@@ -219,15 +219,19 @@ See [docs/DEMO.md](docs/DEMO.md) for the full tamper table.
 
 ## Project status
 
-- **646** vitest cases passing across **46** files.
-- **93%** branch coverage; 84% statement coverage (entrypoint files excluded).
+- **654** vitest cases passing across **48** files.
 - **30**-cycle deterministic soak test (`npm run test:soak`).
-- **8** adversarial test files (~78 cases) covering matching, settlement,
+- **9** adversarial test files (~79 cases) covering matching, settlement,
   vault, receipts, access control, persistence corruption, decimal boundaries,
-  and full-flow API abuse.
+  full-flow API abuse, and a property-based fuzz that mutates random leaves
+  of a saved bundle (default 200 iters, env-overridable to higher).
 - **14** tamper scenarios in the verifier replay CLI; full demo passes
   honest-then-attack via `scripts/demo-replay.sh`.
-- **4**-agent demo verified end-to-end via the live HTTP API.
+- **4**-agent canonical demo verified end-to-end via the live HTTP API; two
+  optional flags (`--include-failure-fixture`, `--include-adversary`) layer
+  additional batches for richer narrative.
+- **9** Forge tests for the on-chain verifier (`contracts/HecateSettlementVerifier.sol`);
+  end-to-end anvil-tested deploy + on-chain bundle verification.
 
 ## Documentation
 
