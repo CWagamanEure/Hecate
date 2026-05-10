@@ -118,12 +118,22 @@ answer; substantial mechanism design.
 
 **Anchor:** `TECHNICAL_PAPER.md` §17.
 
-### `HecateSettlementVerifier.sol`
+### `HecateSettlementVerifier.sol` — v1 stub (landed)
 
-Reproduce `verifyFullBatch` on chain — signature recovery via `ecrecover`,
-canonical-JSON hashes via Keccak primitives, conservation invariants via
+A minimal Solidity adapter that proves the engine signed a given batch-
+receipt body hash. Off-chain callers compute the canonical-JSON hash and
+pass the resulting `bytes32` + 65-byte signature; the contract recovers via
+`ecrecover` and compares to the expected engine address. Forge test suite
+(9 cases) covers honest verification + tampers + bad inputs. Lives at
+[`contracts/HecateSettlementVerifier.sol`](../contracts/HecateSettlementVerifier.sol).
+
+### Full on-chain re-verification (future)
+
+Reproduce `verifyFullBatch` on chain — canonical-JSON hash recomputation
+from typed fields, settlement recomputation, conservation invariants via
 arithmetic. Lets a third party assert "this batch was correctly settled by
-the attested engine" without trusting an off-chain verifier.
+the attested engine" without trusting any off-chain step. Practical only
+after the EIP-712 migration in §5 (canonical JSON in Solidity is impractical).
 
 ---
 

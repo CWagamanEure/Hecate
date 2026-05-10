@@ -256,6 +256,38 @@ Each attempt asserts on both status and error code; any drift fails the demo
 loudly. Combine with `--include-failure-fixture` to run all three batches in
 one session.
 
+### On-chain verification (optional)
+
+The integrity story is portable, not JavaScript-bound. A minimal Solidity
+contract (`contracts/HecateSettlementVerifier.sol`) recovers the engine
+signer with `ecrecover` and verifies it matches the published engine
+address. Requires [Foundry](https://book.getfoundry.sh/).
+
+```sh
+cd contracts
+forge install foundry-rs/forge-std         # first time only
+forge test -vv
+```
+
+Expected: **9 tests pass**, gas usage 6k–17k per call. Honest fixture
+verifies; tampering hash, signature, or expected engine all return false;
+event emission on success but not on failure.
+
+The fixture is deterministic (canonical JSON + RFC 6979 ECDSA). To verify a
+real saved bundle on-chain semantics:
+
+```sh
+npx tsx scripts/gen-onchain-fixture.ts --bundle ./data/last-bundle.json
+```
+
+Prints three Solidity constants. Paste into
+`contracts/test/HecateSettlementVerifier.t.sol` and re-run `forge test`.
+
+The v1 contract is a **stub**: it proves engine-signature authenticity on
+chain. Full re-verification (recomputing the body hash from typed fields,
+plus settlement / conservation invariants) is roadmap material — see
+[ROADMAP.md §4](ROADMAP.md) and §5 (EIP-712 migration).
+
 ### Web verifier panel
 
 While the server is running (`npm run dev`), open

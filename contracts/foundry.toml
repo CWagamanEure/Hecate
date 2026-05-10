@@ -1,0 +1,18 @@
+[profile.default]
+src = "."
+test = "test"
+out = "out"
+libs = ["lib"]
+solc = "0.8.24"
+optimizer = true
+optimizer_runs = 200
+gas_reports = ["HecateSettlementVerifier"]
+
+# Match the v1 doc claim: this is a stub, not a full re-verifier.
+# Receipt body hashes are computed off-chain (canonical JSON in TS); the
+# contract is a pure ecrecover adapter.
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = false
