@@ -307,16 +307,41 @@ function renderResult(j, scenario) {
   }
 }
 
+// Map any server response shape (verify result OR 400 error envelope) to
+// something renderResult can display. Keeps the two button handlers
+// symmetric and ensures 400-class errors show their code+detail instead of
+// rendering REJECTED with no failure rows.
+function asResult(j) {
+  if (j && j.error) {
+    return { ok: false, failures: [{ code: j.error.code, path: null, detail: j.error.detail }] };
+  }
+  return j;
+}
+
+async function postJson(url, body) {
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const text = await r.text();
+    if (!text) return { ok: false, failures: [{ code: "EMPTY_RESPONSE", path: null, detail: `${r.status} ${r.statusText}` }] };
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return { ok: false, failures: [{ code: "MALFORMED_RESPONSE", path: null, detail: e.message + ": " + text.slice(0, 200) }] };
+    }
+  } catch (e) {
+    return { ok: false, failures: [{ code: "FETCH_FAILED", path: null, detail: e.message }] };
+  }
+}
+
 async function verifyHonest() {
   if (!bundle) return;
   $("result").innerHTML = "<div style='color:var(--muted)'>verifying…</div>";
-  const r = await fetch("/receipts/verify", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(bundle)
-  });
-  const j = await r.json();
-  renderResult(j, null);
+  const j = await postJson("/receipts/verify", bundle);
+  renderResult(asResult(j), null);
 }
 
 async function verifyTamper() {
@@ -324,17 +349,8 @@ async function verifyTamper() {
   const scen = $("scenario").value;
   if (!scen) { $("loadError").textContent = "pick a scenario first"; return; }
   $("result").innerHTML = "<div style='color:var(--muted)'>tampering &amp; verifying…</div>";
-  const r = await fetch("/receipts/tamper-verify", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ bundle, scenario: scen })
-  });
-  const j = await r.json();
-  if (j.error) {
-    renderResult({ ok: false, failures: [{ code: j.error.code, path: null, detail: j.error.detail }] }, null);
-  } else {
-    renderResult(j, j.scenario);
-  }
+  const j = await postJson("/receipts/tamper-verify", { bundle, scenario: scen });
+  renderResult(asResult(j), j && j.scenario ? j.scenario : null);
 }
 
 // wire up

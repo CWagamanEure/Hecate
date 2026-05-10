@@ -309,10 +309,13 @@ export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
     }
     if (stale) {
       console.log(
-        "\n  ! Existing demo balances detected. For deterministic expected balances, rerun with"
+        "\n  ! Existing demo balances detected. The simulator's --reset-demo-state only"
       );
       console.log(
-        "    --reset-demo-state --data-dir <server DATA_DIR>  or use a fresh DATA_DIR."
+        "    deletes disk files; if the server is still running with the previous in-memory"
+      );
+      console.log(
+        "    state, balances will accumulate. Restart `npm run dev` for a fully fresh run."
       );
     }
 

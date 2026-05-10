@@ -58,25 +58,36 @@ app_id=$(echo "$response" | jq -r '.runtime.eigencompute_app_id // ""')
 img_digest=$(echo "$response" | jq -r '.runtime.eigencompute_image_digest // ""')
 att_id=$(echo "$response" | jq -r '.runtime.eigencompute_attestation_id // ""')
 
+# Check each eigen field individually (instead of a key:value packed loop)
+# so values containing colons — e.g., a `sha256:abc...` digest — don't
+# truncate the iteration variable.
 if [ "$EXPECTED_MODE" = "EIGEN_TEE" ]; then
-  for pair in "eigencompute_app_id:$app_id" "eigencompute_image_digest:$img_digest" "eigencompute_attestation_id:$att_id"; do
-    field="${pair%%:*}"
-    value="${pair#*:}"
-    if [ -z "$value" ]; then
-      echo "× $field is null/empty in EIGEN_TEE mode" >&2
-      failures=$((failures + 1))
-    fi
-  done
+  if [ -z "$app_id" ]; then
+    echo "× eigencompute_app_id is null/empty in EIGEN_TEE mode" >&2
+    failures=$((failures + 1))
+  fi
+  if [ -z "$img_digest" ]; then
+    echo "× eigencompute_image_digest is null/empty in EIGEN_TEE mode" >&2
+    failures=$((failures + 1))
+  fi
+  if [ -z "$att_id" ]; then
+    echo "× eigencompute_attestation_id is null/empty in EIGEN_TEE mode" >&2
+    failures=$((failures + 1))
+  fi
 else
   # LOCAL_MOCK requires all three eigen fields to be null.
-  for pair in "eigencompute_app_id:$app_id" "eigencompute_image_digest:$img_digest" "eigencompute_attestation_id:$att_id"; do
-    field="${pair%%:*}"
-    value="${pair#*:}"
-    if [ -n "$value" ]; then
-      echo "× $field is set ($value) in LOCAL_MOCK mode" >&2
-      failures=$((failures + 1))
-    fi
-  done
+  if [ -n "$app_id" ]; then
+    echo "× eigencompute_app_id is set ($app_id) in LOCAL_MOCK mode" >&2
+    failures=$((failures + 1))
+  fi
+  if [ -n "$img_digest" ]; then
+    echo "× eigencompute_image_digest is set ($img_digest) in LOCAL_MOCK mode" >&2
+    failures=$((failures + 1))
+  fi
+  if [ -n "$att_id" ]; then
+    echo "× eigencompute_attestation_id is set ($att_id) in LOCAL_MOCK mode" >&2
+    failures=$((failures + 1))
+  fi
 fi
 
 if [ "$signer_mode" != "LOCAL_DEV_KEY" ]; then
