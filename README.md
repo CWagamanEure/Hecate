@@ -245,6 +245,8 @@ See [docs/DEMO.md](docs/DEMO.md) for the full tamper table.
 - [Comparisons](docs/COMPARISONS.md) — vs CoW, UniswapX, Angstrom, Shutter,
   Renegade
 - [Demo](docs/DEMO.md) — exact commands and expected output
+- [Demo-day checklist](docs/DEMO_CHECKLIST.md) — presenter-facing run-day script with recovery branches
+- [FAQ](docs/FAQ.md) — reviewer questions with honest answers
 - [Eigen deployment](docs/EIGEN_DEPLOYMENT.md) — Docker prep + planned Eigen flow
 - [Roadmap](docs/ROADMAP.md) — future work
 
