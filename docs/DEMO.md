@@ -66,11 +66,13 @@ LOCAL_MOCK demo only. No real funds. Mock encryption is architectural, not confi
   reset demo state in ./data
 
 Attestation:
-  runtime_mode:    LOCAL_MOCK
-  engine_address:  0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf
-  matching_rule:   UNIFORM_CLEARING_PRICE_V1
-  market:          ETH/USDC
-  warning:         LOCAL_MOCK runtime — payload encryption is architectural, not security.
+  runtime_mode:       LOCAL_MOCK
+  engine_address:     0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf
+  engine_code_digest: sha256:dev-local
+  signer.mode:        LOCAL_DEV_KEY
+  matching_rule:      UNIFORM_CLEARING_PRICE_V1
+  market:             ETH/USDC
+  warning:            LOCAL_MOCK runtime — payload encryption is architectural, not security.
 
 Deposits:
   ✓ deposited 10 ETH for Agent A (0x2B5AD5...)
@@ -89,6 +91,7 @@ Batch close:
   intent_Agent_A_... FILLED filled_base=10 reserved_released={"ETH":"0","USDC":"0"}
   intent_Agent_B_... FILLED filled_base=4 reserved_released={"ETH":"0","USDC":"80"}
   intent_Agent_C_... PARTIALLY_FILLED filled_base=6 reserved_released={"ETH":"0","USDC":"7180"}
+  bundle_id:        0x...
 
 Verification:
   ✓ full-bundle verification: ok
@@ -101,6 +104,8 @@ Owner-gated access:
   ✓ Agent C fetched their own fill receipt
   ✓ Agent C status (PARTIALLY_FILLED) matches fill receipt
   ✓ cross-agent fetch correctly rejected (Agent B → Agent A's receipt) → NOT_RECEIPT_OWNER
+  ✓ wrong-action challenge correctly rejected (GET_INTENT_STATUS sig replayed at /fill-receipt) → INVALID_REQUEST_SIGNATURE
+  ✓ stale-timestamp challenge correctly rejected (90s-old signed challenge) → STALE_REQUEST
 
 Final balances:
   Agent A: ETH=0,  USDC=35900
@@ -237,10 +242,13 @@ deployment flow.
 | Intent submission (`/intents`) | Acceptance pipeline: signature, decrypt, commitment, reservation. |
 | Agent D rejection | `INSUFFICIENT_FUNDS` does not mark nonce; honest rejection logging. |
 | Batch close clearing at 3590 | Deterministic uniform-clearing matcher with documented tie-break ladder. |
+| `bundle_id` after close | `keccak256(canonicalJson(verifyPayload))` — say it aloud, audience verifies the same artifact. |
 | `verifyFullBatch` ok | Receipt integrity story end-to-end: hashes, signatures, conservation. |
 | Owner-gated `GET_FILL_RECEIPT` | Signed-challenge protocol; key+action+intent_id binding. |
 | Owner-gated `GET_INTENT_STATUS` | Same protocol, separate action; status matches fill receipt. |
-| Cross-agent fetch rejected | `NOT_RECEIPT_OWNER` — the central privacy assertion. |
+| Cross-agent fetch rejected (NOT_RECEIPT_OWNER) | Recovered signer ≠ receipt owner. |
+| Wrong-action challenge rejected (INVALID_REQUEST_SIGNATURE) | Action is part of the canonical preimage; a `GET_INTENT_STATUS` signature does not authorize a `GET_FILL_RECEIPT`. |
+| Stale-timestamp challenge rejected (STALE_REQUEST) | ±60s freshness window; old challenges cannot be replayed. |
 | Final balances | Settlement applied correctly; reservations released. |
 
 ---

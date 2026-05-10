@@ -31,6 +31,9 @@ Options:
   --data-dir <path>           required iff --reset-demo-state
   --save-bundle <path>        write the close-batch bundle (VerifyFullBatchRequest shape)
                               to <path> after settlement; consumed by \`npm run verify\`
+  --allow-digest-mismatch     do not exit on engine_code_digest != --code-digest
+                              (default: hard-fail; mismatched digests break mock encryption
+                              and produce MALFORMED_PAYLOAD on every intent)
   --verbose                   extra output
   --help                      show this help
 
@@ -46,6 +49,7 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
   let dataDir: string | undefined;
   let verbose = false;
   let saveBundle: string | undefined;
+  let allowDigestMismatch = false;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -68,6 +72,9 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
       case "--save-bundle":
         saveBundle = argv[++i];
         break;
+      case "--allow-digest-mismatch":
+        allowDigestMismatch = true;
+        break;
       case "--verbose":
         verbose = true;
         break;
@@ -80,7 +87,7 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
     throw new Error("--reset-demo-state requires --data-dir");
   }
 
-  return { baseUrl, codeDigest, reset, dataDir, verbose, saveBundle };
+  return { baseUrl, codeDigest, reset, dataDir, verbose, saveBundle, allowDigestMismatch };
 }
 
 function main(): void {

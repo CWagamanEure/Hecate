@@ -61,6 +61,7 @@ export type RunDemoOptions = {
   dataDir: string | undefined;
   verbose: boolean;
   saveBundle: string | undefined;
+  allowDigestMismatch: boolean;
 };
 
 export type RunDemoResult = { ok: true } | { ok: false; error: string };
@@ -229,20 +230,30 @@ export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
       matching_rule: string;
       markets: string[];
       warning: string | null;
+      signer: { mode: string; note: string };
     };
     section("Attestation");
-    info(`runtime_mode:    ${att.runtime.runtime_mode}`);
-    info(`engine_address:  ${att.engine_address}`);
-    info(`matching_rule:   ${att.matching_rule}`);
-    info(`market:          ${att.markets.join(", ")}`);
-    if (att.warning) info(`warning:         ${att.warning}`);
+    info(`runtime_mode:       ${att.runtime.runtime_mode}`);
+    info(`engine_address:     ${att.engine_address}`);
+    info(`engine_code_digest: ${att.runtime.engine_code_digest}`);
+    info(`signer.mode:        ${att.signer.mode}`);
+    info(`matching_rule:      ${att.matching_rule}`);
+    info(`market:             ${att.markets.join(", ")}`);
+    if (att.warning) info(`warning:            ${att.warning}`);
 
     if (att.runtime.engine_code_digest !== opts.codeDigest) {
+      if (!opts.allowDigestMismatch) {
+        throw new DemoMismatch(
+          `simulator --code-digest=${opts.codeDigest} != server engine_code_digest=${att.runtime.engine_code_digest}; ` +
+            `payload encryption keys will not agree (every intent would reject as MALFORMED_PAYLOAD). ` +
+            `Re-run with --code-digest ${att.runtime.engine_code_digest}, or pass --allow-digest-mismatch to override.`
+        );
+      }
       console.log(
-        `\n  ! server CODE_DIGEST=${att.runtime.engine_code_digest} differs from simulator --code-digest=${opts.codeDigest}`
+        `\n  ! code-digest mismatch (server=${att.runtime.engine_code_digest}, simulator=${opts.codeDigest})`
       );
       console.log(
-        `  ! payload encryption keys will not agree; expect MALFORMED_PAYLOAD rejections`
+        `  ! --allow-digest-mismatch was set; continuing — expect MALFORMED_PAYLOAD rejections`
       );
     }
 
@@ -392,10 +403,19 @@ export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
       expectedEngineAddress: att.engine_address
     };
 
+    // bundle_id = keccak256(canonicalJson(verifyPayload)). Stable across runs of
+    // the same bundle; lets a presenter say a short hash aloud and have an
+    // audience member verify the same artifact independently.
+    const bundle_id = keccak256Hex(canonicalJson(verifyPayload));
+    info(`bundle_id:        ${bundle_id}`);
+
     // Optionally save the bundle to disk for replay-CLI consumption.
     if (opts.saveBundle) {
       await mkdir(dirname(opts.saveBundle), { recursive: true });
       await writeFile(opts.saveBundle, JSON.stringify(verifyPayload, null, 2), "utf-8");
+      // Sibling .id.txt so a verifier can compare the bundle_id without
+      // recomputing canonical JSON. Bundle JSON shape is unchanged.
+      await writeFile(`${opts.saveBundle}.id.txt`, bundle_id + "\n", "utf-8");
       info(`saved bundle to ${opts.saveBundle}`);
     }
 
@@ -463,28 +483,90 @@ export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
       ok(`${sub.fixture.name} status (${sr.status}) matches fill receipt`);
     }
 
-    // Cross-agent privacy assertion: agent[1] tries to fetch agent[0]'s receipt.
+    // Cross-agent privacy assertions. Three distinct rejection paths exercise
+    // the three independent guards in server/auth.ts: (1) recovered-signer ==
+    // requester, (2) action+intent_id binding via the canonical-JSON preimage,
+    // (3) ±60s freshness window.
     if (acceptedSubs.length >= 2) {
       const victim = acceptedSubs[0]!;
       const attacker = acceptedSubs[1]!;
-      const challenge = signChallenge(
+
+      // (1) Wrong owner: attacker signs a valid GET_FILL_RECEIPT challenge for
+      // victim's intent. Recovered signer != receipt owner -> NOT_RECEIPT_OWNER.
+      const wrongOwnerChallenge = signChallenge(
         "GET_FILL_RECEIPT",
         victim.intent_id,
         attacker.fixture.private_key
       );
-      const r = await fetchJsonNoThrow(
+      const r1 = await fetchJsonNoThrow(
         opts.baseUrl,
         "POST",
         `/intents/${victim.intent_id}/fill-receipt`,
-        challenge
+        wrongOwnerChallenge
       );
-      if (r.status !== 403) {
+      if (r1.status !== 403 || r1.body?.error?.code !== "NOT_RECEIPT_OWNER") {
         throw new DemoMismatch(
-          `expected cross-agent fetch to 403, got ${r.status}`
+          `expected wrong-owner -> 403 NOT_RECEIPT_OWNER, got ${r1.status} ${r1.body?.error?.code}`
         );
       }
       ok(
-        `cross-agent fetch correctly rejected (${attacker.fixture.name} attempting to read ${victim.fixture.name}'s receipt) -> ${r.body?.error?.code}`
+        `cross-agent fetch correctly rejected (${attacker.fixture.name} -> ${victim.fixture.name}'s receipt) -> NOT_RECEIPT_OWNER`
+      );
+
+      // (2) Wrong action: attacker signs a GET_INTENT_STATUS challenge but
+      // submits it to /fill-receipt. The verifier hashes with action=
+      // GET_FILL_RECEIPT, recovery yields a different address, so the request
+      // is rejected as INVALID_REQUEST_SIGNATURE.
+      const wrongActionChallenge = signChallenge(
+        "GET_INTENT_STATUS",
+        victim.intent_id,
+        attacker.fixture.private_key
+      );
+      const r2 = await fetchJsonNoThrow(
+        opts.baseUrl,
+        "POST",
+        `/intents/${victim.intent_id}/fill-receipt`,
+        wrongActionChallenge
+      );
+      if (r2.status !== 401 || r2.body?.error?.code !== "INVALID_REQUEST_SIGNATURE") {
+        throw new DemoMismatch(
+          `expected wrong-action -> 401 INVALID_REQUEST_SIGNATURE, got ${r2.status} ${r2.body?.error?.code}`
+        );
+      }
+      ok(
+        `wrong-action challenge correctly rejected (GET_INTENT_STATUS sig replayed at /fill-receipt) -> INVALID_REQUEST_SIGNATURE`
+      );
+
+      // (3) Stale timestamp: attacker signs a fresh-looking but 90s-old
+      // challenge as themselves for their own intent. The freshness window is
+      // ±60s, so the server rejects with STALE_REQUEST before even attempting
+      // signature recovery against the receipt owner.
+      const ownIntentId = attacker.intent_id;
+      const staleTs = Date.now() - 90_000;
+      const staleJson = canonicalJson({
+        action: "GET_FILL_RECEIPT",
+        intent_id: ownIntentId,
+        timestamp_ms: staleTs
+      });
+      const staleHash = keccak256Hex(staleJson);
+      const staleChallenge = {
+        requester: privateKeyToAddress(attacker.fixture.private_key),
+        timestamp_ms: staleTs,
+        signature: signHash(staleHash, attacker.fixture.private_key)
+      };
+      const r3 = await fetchJsonNoThrow(
+        opts.baseUrl,
+        "POST",
+        `/intents/${ownIntentId}/fill-receipt`,
+        staleChallenge
+      );
+      if (r3.status !== 401 || r3.body?.error?.code !== "STALE_REQUEST") {
+        throw new DemoMismatch(
+          `expected stale-timestamp -> 401 STALE_REQUEST, got ${r3.status} ${r3.body?.error?.code}`
+        );
+      }
+      ok(
+        `stale-timestamp challenge correctly rejected (90s-old signed challenge) -> STALE_REQUEST`
       );
     }
 

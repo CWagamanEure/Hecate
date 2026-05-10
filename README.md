@@ -63,6 +63,7 @@ Batch close:
   intent_Agent_A_... FILLED filled_base=10
   intent_Agent_B_... FILLED filled_base=4
   intent_Agent_C_... PARTIALLY_FILLED filled_base=6
+  bundle_id:        0x...
 
 Verification:
   ✓ full-bundle verification: ok
@@ -70,6 +71,8 @@ Verification:
 Owner-gated access:
   ✓ Agent A fetched their own fill receipt
   ✓ cross-agent fetch correctly rejected (Agent B → Agent A's receipt) → NOT_RECEIPT_OWNER
+  ✓ wrong-action challenge correctly rejected → INVALID_REQUEST_SIGNATURE
+  ✓ stale-timestamp challenge correctly rejected → STALE_REQUEST
 
 Final balances:
   Agent A: ETH=0,  USDC=35900
