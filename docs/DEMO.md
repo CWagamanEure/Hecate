@@ -256,6 +256,33 @@ Each attempt asserts on both status and error code; any drift fails the demo
 loudly. Combine with `--include-failure-fixture` to run all three batches in
 one session.
 
+### Demo against the Eigen instance
+
+Once deployed (see [EIGEN_DEPLOYMENT.md](EIGEN_DEPLOYMENT.md)), the entire
+demo runs against the deployed URL with one flag change. Same simulator,
+same replay CLI, same tamper scenarios.
+
+```sh
+# 1. Confirm the live instance's attestation matches the published deploy.
+EXPECTED_MODE=EIGEN_TEE npm run eigen:attest-check -- https://<deployed-url>
+
+# 2. Run the simulator against the Eigen instance.
+npm run simulate -- \
+  --base-url https://<deployed-url> \
+  --code-digest <deployed-image-digest> \
+  --save-bundle ./data/eigen-bundle.json
+
+# 3. Verify the bundle locally (offline; no contact with Eigen).
+npm run verify -- ./data/eigen-bundle.json
+
+# 4. Run a tamper scenario against the same bundle.
+npm run verify -- ./data/eigen-bundle.json --scenario wrong-key --expect-fail
+```
+
+The `eigen:attest-check` step asserts `runtime_mode === EIGEN_TEE`,
+non-null eigen metadata, and that `signer.mode` reports honestly. It
+exits non-zero on any mismatch, so this step is safe to gate a demo on.
+
 ### On-chain verification (optional)
 
 The integrity story is portable, not JavaScript-bound. A minimal Solidity

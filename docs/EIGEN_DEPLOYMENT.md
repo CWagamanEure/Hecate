@@ -45,80 +45,132 @@ Versions verified locally:
 
 ## 3. Local Docker smoke
 
-Verify the image works locally before remote deploy.
+Two smoke variants. Use the amd64 one before deploying to Eigen — that is
+the architecture Eigen will run.
 
 ```sh
-# One-command end-to-end: build + run container + simulate + verify + tamper.
+# Native architecture (fast; use during development).
 npm run docker:smoke
+
+# linux/amd64 under emulation (slower; use as pre-deploy verification).
+npm run docker:smoke-amd64
 ```
 
-What this does (see `scripts/docker-smoke.sh`):
-
-1. Builds `hecate:smoke` from the `Dockerfile`.
-2. Runs the container with LOCAL_MOCK env, mapped to `127.0.0.1:8787`.
-3. Polls `/healthz` until the container is up.
-4. `GET /attestation` and prints the response.
-5. Runs `npm run simulate` from the host, pointed at the container,
-   with `--save-bundle ./data/docker-bundle.json`.
-6. `npm run verify -- ./data/docker-bundle.json` — honest bundle verifies.
-7. `npm run verify -- ./data/docker-bundle.json --scenario wrong-key
-   --expect-fail` — tamper rejection works through Docker.
-8. Stops the container.
+Both run the same flow: build → run → poll `/healthz` → attestation check →
+simulator end-to-end → verify the saved bundle → run a `wrong-key` tamper
+that must reject. The amd64 variant also explicitly calls
+`scripts/eigen-attest-check.sh` against the local container with
+`EXPECTED_MODE=LOCAL_MOCK`, exercising the same attestation-validation
+logic you will run against the deployed Eigen instance.
 
 The simulator and the replay CLI run **on the host**, not inside the
 container. Agents are external clients; the container is only the engine.
 
----
+### Pre-deploy preflight
 
-## 4. EigenCompute deployment plan (Ticket 21)
-
-The intended sequence. Exact `ecloud` flags depend on the CLI version and
-will be locked in Ticket 21 once we run them for real:
+A single command runs every local check before deploy:
 
 ```sh
-# auth
+npm run eigen:preflight
+```
+
+Verifies Docker + buildx + jq are available, runs the full amd64 smoke,
+then prints the `ecloud deploy` command template you'll fill in.
+
+---
+
+## 4. EigenCompute deployment plan
+
+### What this section covers
+
+A split between (a) the commands I have **verified locally on this
+machine** and (b) the commands **you run yourself** because they require
+Eigen credentials that this repo does not have access to.
+
+The ecloud CLI flag set may have drifted; treat the template as exactly
+that and verify against `ecloud deploy --help` on your installed CLI.
+
+### Verified locally
+
+```sh
+# Cross-build for linux/amd64. Verified on Apple Silicon under emulation;
+# the produced image runs cleanly and serves the full demo end-to-end.
+docker buildx build --platform linux/amd64 -t hecate:amd64 --load .
+
+# End-to-end amd64 smoke. Verified: full simulator + replay + wrong-key
+# tamper all pass against the amd64 image.
+npm run docker:smoke-amd64
+```
+
+### Run yourself
+
+```sh
+# 1. Authenticate.
 ecloud auth login
 
-# pick a network
-ecloud env set sepolia       # or whichever target
+# 2. Target Sepolia. Hecate's Eigen app/wallet metadata lives on Sepolia for v1.
+ecloud env set sepolia
 
-# build for amd64 (always — Eigen nodes are amd64)
-docker build --platform linux/amd64 -t hecate:eigen .
+# 3. Tag and push the image you verified in the preflight.
+docker tag hecate:amd64-smoke <eigen-registry>/<account>/hecate:v1
+docker push                   <eigen-registry>/<account>/hecate:v1
 
-# push to whichever registry Eigen wires up
-docker login <eigen-registry>
-docker tag hecate:eigen <eigen-registry>/<account>/hecate:v1
-docker push                       <eigen-registry>/<account>/hecate:v1
-
-# deploy
+# 4. Deploy. Verify flag syntax against your `ecloud deploy --help`.
 ecloud deploy <eigen-registry>/<account>/hecate:v1 \
   -e RUNTIME_MODE=EIGEN_TEE \
-  -e ENGINE_PRIVATE_KEY=<dev-key>     # see §8
+  -e ENGINE_PRIVATE_KEY=<dev-key>                  # see §8
   -e CODE_DIGEST=<the-deployed-image-digest> \
   -e EIGENCOMPUTE_APP_ID=<from ecloud after deploy> \
   -e EIGENCOMPUTE_IMAGE_DIGEST=<from ecloud after deploy> \
   -e EIGENCOMPUTE_ATTESTATION_ID=<from ecloud after deploy>
+
+# 5. Verify the deployed instance's attestation reports correctly.
+EXPECTED_MODE=EIGEN_TEE npm run eigen:attest-check -- https://<deployed-url>
+
+# 6. Run the demo against the deployed instance.
+npm run simulate -- \
+  --base-url https://<deployed-url> \
+  --code-digest <deployed-image-digest> \
+  --save-bundle ./data/eigen-bundle.json
+
+# 7. Offline bundle verification (no contact with Eigen).
+npm run verify -- ./data/eigen-bundle.json
+
+# 8. Demonstrate the integrity story with a tamper scenario.
+npm run verify -- ./data/eigen-bundle.json --scenario wrong-key --expect-fail
 ```
 
 After deployment, record:
 
-- App ID
-- Public URL or instance IP
-- Image digest as deployed (Eigen reports this; should match `CODE_DIGEST`)
-- Attestation ID
-- Engine address (recovered from `/attestation` — should match the address
-  derived from `ENGINE_PRIVATE_KEY`)
+- App ID: _________
+- Public URL: _________
+- Image digest as deployed: _________ (should match `CODE_DIGEST`)
+- Attestation ID: _________
+- Engine address: _________ (recovered from `/attestation`; should match
+  `privateKeyToAddress(ENGINE_PRIVATE_KEY)`)
 
-Verify it's live:
+Then verify in one command:
 
 ```sh
-curl https://<eigen-instance>/healthz
-curl https://<eigen-instance>/attestation
+EXPECTED_MODE=EIGEN_TEE npm run eigen:attest-check -- https://<deployed-url>
 ```
 
-The `/attestation` response will report `runtime.runtime_mode = "EIGEN_TEE"`
-and the three eigen fields populated. It will still report
-`signer.mode = "LOCAL_DEV_KEY"` (see §8).
+Expected output:
+
+```
+✓ attestation check PASSED for https://<deployed-url>
+    runtime_mode:       EIGEN_TEE
+    engine_address:     0x...
+    engine_code_digest: <deployed-image-digest>
+    signer.mode:        LOCAL_DEV_KEY
+    matching_rule:      UNIFORM_CLEARING_PRICE_V1
+    eigen_app_id:       <recorded above>
+    eigen_image_digest: <recorded above>
+    eigen_attestation:  <recorded above>
+```
+
+The script exits non-zero on any mismatch. `signer.mode` always reports
+`LOCAL_DEV_KEY` in v1 — see §8 (real Eigen app-wallet signing is future work).
 
 ---
 
