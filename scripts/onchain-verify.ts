@@ -32,6 +32,7 @@ import {
   createWalletClient,
   http,
   defineChain,
+  getAddress,
   type Hex,
   type Address
 } from "viem";
@@ -97,6 +98,22 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  // Read and validate the bundle first — gives a clearer error than env-var
+  // failure for the common case of a typo'd path or stale bundle.
+  const raw = await readFile(bundlePath, "utf-8");
+  let bundle: any;
+  try {
+    bundle = JSON.parse(raw);
+  } catch (e) {
+    throw new Error(`bundle ${bundlePath} is not valid JSON: ${(e as Error).message}`);
+  }
+  if (!bundle.batchReceipt?.engine_signature) {
+    throw new Error(`bundle ${bundlePath} missing batchReceipt.engine_signature`);
+  }
+  if (!bundle.expectedEngineAddress) {
+    throw new Error(`bundle ${bundlePath} missing expectedEngineAddress`);
+  }
+
   const rpcUrl = requireEnv("SEPOLIA_RPC_URL");
   const verifierAddr = requireEnv("VERIFIER_ADDRESS") as Address;
   const deployerPk = process.env.DEPLOYER_PRIVATE_KEY as Hex | undefined;
@@ -106,11 +123,6 @@ async function main(): Promise<void> {
     );
   }
 
-  const raw = await readFile(bundlePath, "utf-8");
-  const bundle = JSON.parse(raw);
-  if (!bundle.batchReceipt?.engine_signature) {
-    throw new Error(`bundle ${bundlePath} missing batchReceipt.engine_signature`);
-  }
   const sig = bundle.batchReceipt.engine_signature as Hex;
   // hashBatchReceiptBody strips engine_signature defensively, so we pass the
   // signed body directly.
@@ -182,21 +194,16 @@ async function main(): Promise<void> {
   }
   console.log(`  events emitted: ${rcpt.logs.length}`);
 
-  // Decode the ReceiptVerified event manually from topics.
-  const eventTopic0 =
-    "0x" +
-    Buffer.from(
-      // keccak256("ReceiptVerified(bytes32,address)") — compute via viem's
-      // built-in event topic helper would be cleaner; this is intentionally
-      // explicit so future readers see the binding.
-      "ReceiptVerified(bytes32,address)"
-    ).toString("hex");
-  // Simpler: just check there's a log whose topics[0] looks like our event,
-  // and decode topics[1] (hash) + topics[2] (signer).
+  // Decode the ReceiptVerified event from a log emitted by the verifier
+  // contract. The event has two indexed topics (hash, signer); topics[0] is
+  // the event signature hash (which we don't need to recompute because the
+  // address+arity filter already pins this to OUR event).
   for (const log of rcpt.logs) {
     if (log.address.toLowerCase() === verifierAddr.toLowerCase() && log.topics.length === 3) {
       const eventHash = log.topics[1]!;
-      const eventSigner = ("0x" + log.topics[2]!.slice(-40)) as Address;
+      // topics[2] is the 32-byte left-padded address; recover the 20-byte
+      // address and normalize to EIP-55 checksum form for display.
+      const eventSigner = getAddress("0x" + log.topics[2]!.slice(-40));
       console.log(`  event ReceiptVerified:`);
       console.log(`    hash:   ${eventHash}`);
       console.log(`    signer: ${eventSigner}`);
