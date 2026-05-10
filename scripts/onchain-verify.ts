@@ -39,6 +39,10 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { hashBatchReceiptBody } from "@shared/crypto";
+import { loadDotenv } from "@shared/persistence";
+
+// Load .env from project root if present. Shell vars win over file values.
+loadDotenv(".env");
 
 // Minimal ABI — only the three pieces we need.
 const VERIFIER_ABI = [

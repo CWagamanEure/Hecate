@@ -1,5 +1,12 @@
+import { loadDotenv } from "@shared/persistence";
 import { bootstrap } from "./runtime";
 import { buildApp } from "./buildApp";
+
+// Pick up SEPOLIA_RPC_URL / VERIFIER_ADDRESS / DEPLOYER_PRIVATE_KEY plus the
+// engine's own env vars from a project-root .env if present. Shell vars
+// still win over .env. Tests bypass this entirely (serverFixture builds env
+// synthetically).
+loadDotenv(".env");
 
 async function main(): Promise<void> {
   const state = await bootstrap();
