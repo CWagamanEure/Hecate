@@ -109,7 +109,9 @@ describe("end-to-end 4-agent demo via API", () => {
       }
     });
     expect(verify.statusCode).toBe(200);
-    expect(verify.json()).toEqual({ ok: true });
+    const verifyJson = verify.json();
+    expect(verifyJson.ok).toBe(true);
+    expect(verifyJson.bundle_id).toMatch(/^0x[a-f0-9]{64}$/);
   });
 
   it("tampered vault_state_after sent to /receipts/verify -> not ok", async () => {

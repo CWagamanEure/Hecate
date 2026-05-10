@@ -5,6 +5,7 @@ import { vaultRoutes } from "./routes/vault";
 import { intentsRoutes } from "./routes/intents";
 import { batchesRoutes } from "./routes/batches";
 import { verifyRoutes } from "./routes/verify";
+import { staticRoutes } from "./routes/static";
 
 export type BuildAppOptions = {
   state: ServerState;
@@ -19,6 +20,7 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
   });
   const mutex = opts.mutex ?? new Mutex();
 
+  app.register(staticRoutes);
   app.register(publicRoutes, { state: opts.state });
   app.register(vaultRoutes, { state: opts.state, mutex });
   app.register(intentsRoutes, { state: opts.state, mutex });

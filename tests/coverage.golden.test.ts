@@ -153,6 +153,8 @@ describe("golden — canonical 4-agent demo", () => {
         expectedEngineAddress: state.engineAddress
       }
     });
-    expect(verify.json()).toEqual({ ok: true });
+    const verifyJson = verify.json();
+    expect(verifyJson.ok).toBe(true);
+    expect(verifyJson.bundle_id).toMatch(/^0x[a-f0-9]{64}$/);
   });
 });

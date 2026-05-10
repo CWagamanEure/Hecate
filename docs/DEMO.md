@@ -208,6 +208,27 @@ Runs the simulator (saving the bundle), then verifies the honest bundle, then
 runs every tamper scenario with `--expect-fail`. Ends with
 `ALL DEMO SCENARIOS PASSED` if every attack was correctly rejected.
 
+### Web verifier panel
+
+While the server is running (`npm run dev`), open
+[http://127.0.0.1:8787/](http://127.0.0.1:8787/) in a browser. The panel:
+
+- Auto-loads `/attestation` and renders `runtime_mode`, `engine_address`,
+  `engine_code_digest`, `signer.mode`, plus the LOCAL_MOCK warning. EIGEN_TEE
+  deployments also show the three eigen metadata fields.
+- Accepts a saved bundle by drag-drop, file picker, or paste. Shows
+  `batch_id`, `num_intents`, `num_matched`, and `clearing_price` summary, plus
+  the `expectedEngineAddress`.
+- **Verify honest** posts the bundle to `/receipts/verify` and renders a green
+  banner with the `bundle_id` if every check passes.
+- **Tamper & verify** picks one of the 14 scenarios, posts to
+  `/receipts/tamper-verify`, and renders a red banner with each failure
+  (`code`, `path`, `detail`) plus the scenario's "what this demonstrates" text.
+
+The panel is a single static HTML file served by the engine. It makes no
+external requests; everything runs on the host the engine runs on. Same
+attestation, same verifier, same tamper scenarios as the CLI — just visual.
+
 ### Run the demo against a Docker container
 
 ```sh

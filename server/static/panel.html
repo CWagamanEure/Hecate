@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hecate verifier panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0e0e10;
+      --panel: #18181b;
+      --panel-border: #2a2a30;
+      --text: #e6e6e9;
+      --muted: #9a9aa3;
+      --accent: #c0a8ff;
+      --good: #4ade80;
+      --bad:  #f87171;
+      --warn: #fbbf24;
+      --code: #c8d3ff;
+    }
+    html, body { background: var(--bg); color: var(--text); }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0; padding: 24px;
+      max-width: 1100px; margin-inline: auto;
+      line-height: 1.45;
+    }
+    h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: 0.3px; }
+    h1 .hecate { color: var(--accent); }
+    h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0 0 12px; }
+    .subtitle { color: var(--muted); margin-bottom: 28px; font-size: 13px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+    .row { display: grid; grid-template-columns: 220px 1fr; gap: 8px 16px; align-items: baseline; }
+    .row > .key { color: var(--muted); font-size: 13px; }
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; color: var(--code); word-break: break-all; }
+    .badge {
+      display: inline-block; padding: 2px 10px; border-radius: 999px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px; letter-spacing: 0.4px;
+      background: #2a2a30; color: var(--text); border: 1px solid #3a3a44;
+    }
+    .badge.local { background: #2a2520; border-color: #443a30; color: var(--warn); }
+    .badge.eigen { background: #16291f; border-color: #1f4a36; color: var(--good); }
+    .warning {
+      margin-top: 12px; padding: 10px 12px; border-radius: 6px;
+      background: #2a2520; border: 1px solid #443a30; color: var(--warn);
+      font-size: 13px;
+    }
+    .drop {
+      border: 2px dashed #3a3a44; border-radius: 8px;
+      padding: 28px 16px; text-align: center; color: var(--muted);
+      cursor: pointer; transition: border-color 0.1s, background 0.1s;
+    }
+    .drop:hover, .drop.over { border-color: var(--accent); background: #1c1a26; color: var(--text); }
+    .drop input[type=file] { display: none; }
+    textarea {
+      width: 100%; min-height: 100px; box-sizing: border-box;
+      background: #101013; color: var(--code); border: 1px solid var(--panel-border);
+      border-radius: 6px; padding: 10px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px; margin-top: 12px; resize: vertical;
+    }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; align-items: center; }
+    button, select {
+      background: #25252b; color: var(--text);
+      border: 1px solid #3a3a44; border-radius: 6px;
+      padding: 9px 14px; font-size: 14px; cursor: pointer;
+    }
+    button.primary { background: #2a2540; border-color: #4a3a78; color: #e8dfff; }
+    button:hover { border-color: var(--accent); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    select { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+    .result-banner {
+      padding: 14px 18px; border-radius: 8px; margin-bottom: 14px;
+      font-size: 16px; font-weight: 600; letter-spacing: 0.3px;
+    }
+    .result-banner.ok  { background: #133525; color: var(--good); border: 1px solid #1f5a3a; }
+    .result-banner.bad { background: #3a1818; color: var(--bad);  border: 1px solid #5a2a2a; }
+    .failure {
+      padding: 10px 14px; margin-bottom: 6px;
+      background: #1f1416; border-left: 3px solid var(--bad);
+      border-radius: 4px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12.5px;
+    }
+    .failure .code { color: var(--bad); font-weight: 600; }
+    .failure .path { color: var(--muted); margin-left: 8px; }
+    .failure .detail { color: var(--text); margin-top: 4px; }
+    .demo-note {
+      margin-top: 14px; padding: 12px 14px; border-radius: 6px;
+      background: #1a1a22; border-left: 3px solid var(--accent);
+      font-size: 13px; color: var(--text);
+    }
+    .demo-note .label { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 14px; }
+    .summary div { background: #101013; padding: 10px; border-radius: 6px; }
+    .summary .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+    .summary .val { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 14px; margin-top: 4px; color: var(--code); }
+    .err-line { color: var(--bad); font-size: 13px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1><span class="hecate">Hecate</span> verifier panel</h1>
+  <p class="subtitle">
+    Live attestation, bundle inspection, honest replay, and 14 tamper scenarios — all driven by the same
+    <code style="color:var(--code)">verifyFullBatch</code> the CLI uses.
+  </p>
+
+  <!-- Attestation card -->
+  <div class="card">
+    <h2>Attestation</h2>
+    <div id="attestation">loading…</div>
+  </div>
+
+  <!-- Bundle inspector -->
+  <div class="card">
+    <h2>Bundle</h2>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept="application/json,.json" />
+      <div><strong>Drop a bundle JSON here</strong> or click to choose a file</div>
+      <div style="font-size:12px;margin-top:6px;">
+        Typically <code>./data/last-bundle.json</code> from <code>npm run simulate -- --save-bundle …</code>
+      </div>
+    </label>
+    <details style="margin-top:14px">
+      <summary style="cursor:pointer;color:var(--muted);font-size:13px">…or paste JSON</summary>
+      <textarea id="paste" placeholder='{"batchReceipt": {…}, "fillReceipts": [...], …}'></textarea>
+      <div class="actions"><button id="loadPaste">Load pasted bundle</button></div>
+    </details>
+    <div id="bundleSummary" style="display:none">
+      <div class="summary">
+        <div><div class="label">batch_id</div><div class="val" id="sumBatchId">—</div></div>
+        <div><div class="label">num_intents</div><div class="val" id="sumNumIntents">—</div></div>
+        <div><div class="label">num_matched</div><div class="val" id="sumNumMatched">—</div></div>
+        <div><div class="label">clearing_price</div><div class="val" id="sumClearing">—</div></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="key">expectedEngineAddress</div><div class="mono" id="sumExpEngine">—</div>
+        <div class="key">bundle_id (after verify)</div><div class="mono" id="sumBundleId">—</div>
+      </div>
+    </div>
+    <div class="err-line" id="loadError"></div>
+  </div>
+
+  <!-- Actions -->
+  <div class="card">
+    <h2>Verify</h2>
+    <div class="actions">
+      <button id="verifyHonest" class="primary" disabled>Verify honest</button>
+      <select id="scenario" disabled>
+        <option value="">— pick a tamper scenario —</option>
+      </select>
+      <button id="verifyTamper" disabled>Tamper &amp; verify</button>
+    </div>
+    <div id="result" style="margin-top:18px"></div>
+  </div>
+
+  <p class="subtitle" style="margin-top:32px;font-size:12px">
+    LOCAL_MOCK runtime: payload encryption is architectural, not security. Receipts produced under LOCAL_MOCK are research artifacts.
+  </p>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let bundle = null;
+
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v;
+    else if (k === "html") e.innerHTML = v;
+    else e.setAttribute(k, v);
+  }
+  for (const c of children) {
+    if (c == null) continue;
+    if (typeof c === "string") e.appendChild(document.createTextNode(c));
+    else e.appendChild(c);
+  }
+  return e;
+}
+
+function row(key, val, mono) {
+  return [
+    el("div", { class: "key" }, key),
+    el("div", { class: mono ? "mono" : "" }, String(val))
+  ];
+}
+
+async function loadAttestation() {
+  const att = $("attestation");
+  try {
+    const r = await fetch("/attestation");
+    const j = await r.json();
+    const modeBadge = el("span",
+      { class: "badge " + (j.runtime.runtime_mode === "EIGEN_TEE" ? "eigen" : "local") },
+      j.runtime.runtime_mode);
+    const signerBadge = el("span", { class: "badge" }, j.signer.mode);
+    const grid = el("div", { class: "row" });
+    grid.append(
+      el("div", { class: "key" }, "runtime_mode"),       el("div", null, modeBadge),
+      el("div", { class: "key" }, "engine_address"),     el("div", { class: "mono" }, j.engine_address),
+      el("div", { class: "key" }, "engine_code_digest"), el("div", { class: "mono" }, j.runtime.engine_code_digest),
+      el("div", { class: "key" }, "signer.mode"),        el("div", null, signerBadge),
+      el("div", { class: "key" }, "matching_rule"),      el("div", { class: "mono" }, j.matching_rule),
+      el("div", { class: "key" }, "markets"),            el("div", { class: "mono" }, j.markets.join(", "))
+    );
+    if (j.runtime.runtime_mode === "EIGEN_TEE") {
+      grid.append(
+        el("div", { class: "key" }, "eigen_app_id"),         el("div", { class: "mono" }, j.runtime.eigencompute_app_id || "—"),
+        el("div", { class: "key" }, "eigen_image_digest"),   el("div", { class: "mono" }, j.runtime.eigencompute_image_digest || "—"),
+        el("div", { class: "key" }, "eigen_attestation_id"), el("div", { class: "mono" }, j.runtime.eigencompute_attestation_id || "—")
+      );
+    }
+    att.innerHTML = "";
+    att.appendChild(grid);
+    if (j.warning) att.appendChild(el("div", { class: "warning" }, j.warning));
+    if (j.signer.note) att.appendChild(el("div", {
+      class: "demo-note", style: "margin-top:10px"
+    },
+      el("div", { class: "label" }, "signer note"),
+      j.signer.note
+    ));
+  } catch (e) {
+    att.innerHTML = "";
+    att.appendChild(el("div", { class: "err-line" }, "could not load /attestation: " + e.message));
+  }
+}
+
+async function loadScenarios() {
+  // Hardcoded list — server doesn't expose a list endpoint in v1.
+  // Order matches scripts/demo-replay.sh.
+  const scenarios = [
+    "clearing-price", "vault-after-hash", "reservation-after-hash",
+    "settlement-hash", "intent-envelope-root", "fill-base", "reserved-released",
+    "signature-bytes", "wrong-key", "swap-fill-receipt-body",
+    "tamper-vault-supporting", "tamper-settlement-deltas", "missing-fill-receipt",
+    "runtime-eigen-incoherent"
+  ];
+  const sel = $("scenario");
+  for (const s of scenarios) sel.appendChild(el("option", { value: s }, s));
+}
+
+function setBundle(obj, sourceLabel) {
+  bundle = obj;
+  $("bundleSummary").style.display = "block";
+  $("sumBatchId").textContent = obj.batchReceipt?.batch_id || "—";
+  $("sumNumIntents").textContent = obj.batchReceipt?.num_intents ?? "—";
+  $("sumNumMatched").textContent = obj.batchReceipt?.num_matched ?? "—";
+  $("sumClearing").textContent = obj.batchReceipt?.clearing_price || "—";
+  $("sumExpEngine").textContent = obj.expectedEngineAddress || "—";
+  $("sumBundleId").textContent = "(verify to compute)";
+  $("verifyHonest").disabled = false;
+  $("verifyTamper").disabled = false;
+  $("scenario").disabled = false;
+  $("loadError").textContent = sourceLabel ? "loaded from " + sourceLabel : "";
+  $("result").innerHTML = "";
+}
+
+async function loadFile(file) {
+  try {
+    const text = await file.text();
+    const obj = JSON.parse(text);
+    setBundle(obj, file.name);
+  } catch (e) {
+    $("loadError").textContent = "could not parse JSON: " + e.message;
+  }
+}
+
+function renderResult(j, scenario) {
+  const out = $("result");
+  out.innerHTML = "";
+  const banner = el("div", { class: "result-banner " + (j.ok ? "ok" : "bad") },
+    j.ok ? "Result: VERIFIED ✓" : "Result: REJECTED ✗");
+  out.appendChild(banner);
+
+  if (j.bundle_id) {
+    out.appendChild(el("div", { class: "row", style: "margin-bottom:12px" },
+      el("div", { class: "key" }, "bundle_id"),
+      el("div", { class: "mono" }, j.bundle_id)
+    ));
+    $("sumBundleId").textContent = j.bundle_id;
+  }
+
+  if (!j.ok && j.failures) {
+    const header = el("h2", null, "failures (" + j.failures.length + ")");
+    out.appendChild(header);
+    for (const f of j.failures) {
+      const fail = el("div", { class: "failure" });
+      fail.appendChild(el("div", null,
+        el("span", { class: "code" }, f.code),
+        el("span", { class: "path" }, f.path || "")
+      ));
+      if (f.detail) fail.appendChild(el("div", { class: "detail" }, f.detail));
+      out.appendChild(fail);
+    }
+  }
+
+  if (scenario) {
+    out.appendChild(el("div", { class: "demo-note" },
+      el("div", { class: "label" }, "scenario: " + scenario.name),
+      el("div", null, scenario.description),
+      el("div", { style: "margin-top:8px;color:var(--muted)" }, scenario.demonstrates)
+    ));
+  }
+}
+
+async function verifyHonest() {
+  if (!bundle) return;
+  $("result").innerHTML = "<div style='color:var(--muted)'>verifying…</div>";
+  const r = await fetch("/receipts/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(bundle)
+  });
+  const j = await r.json();
+  renderResult(j, null);
+}
+
+async function verifyTamper() {
+  if (!bundle) return;
+  const scen = $("scenario").value;
+  if (!scen) { $("loadError").textContent = "pick a scenario first"; return; }
+  $("result").innerHTML = "<div style='color:var(--muted)'>tampering &amp; verifying…</div>";
+  const r = await fetch("/receipts/tamper-verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ bundle, scenario: scen })
+  });
+  const j = await r.json();
+  if (j.error) {
+    renderResult({ ok: false, failures: [{ code: j.error.code, path: null, detail: j.error.detail }] }, null);
+  } else {
+    renderResult(j, j.scenario);
+  }
+}
+
+// wire up
+window.addEventListener("DOMContentLoaded", () => {
+  loadAttestation();
+  loadScenarios();
+  $("file").addEventListener("change", (e) => {
+    if (e.target.files[0]) loadFile(e.target.files[0]);
+  });
+  const drop = $("drop");
+  drop.addEventListener("dragover",  (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", ()  => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault(); drop.classList.remove("over");
+    if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+  });
+  $("loadPaste").addEventListener("click", () => {
+    try {
+      const obj = JSON.parse($("paste").value);
+      setBundle(obj, "pasted JSON");
+    } catch (e) {
+      $("loadError").textContent = "could not parse JSON: " + e.message;
+    }
+  });
+  $("verifyHonest").addEventListener("click", verifyHonest);
+  $("verifyTamper").addEventListener("click", verifyTamper);
+});
+</script>
+</body>
+</html>
