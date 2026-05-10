@@ -1,0 +1,38 @@
+{
+  "name": "hecate",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Hecate: confidential intent execution for autonomous agents (research/MVP).",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch server/index.ts",
+    "start": "tsx server/index.ts",
+    "simulate": "tsx agents/simulator.ts",
+    "verify": "tsx agents/replay.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:soak": "vitest run tests/soak.demoSequences.test.ts",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "docker:build": "docker build -t hecate:dev .",
+    "docker:run": "docker run --rm -p 8787:8787 -e ENGINE_PRIVATE_KEY=0x0000000000000000000000000000000000000000000000000000000000000001 hecate:dev",
+    "docker:smoke": "bash scripts/docker-smoke.sh"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.5.0",
+    "@noble/secp256k1": "^2.1.0",
+    "fastify": "^4.28.1",
+    "viem": "^2.21.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@vitest/coverage-v8": "^1.6.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^1.6.0"
+  }
+}

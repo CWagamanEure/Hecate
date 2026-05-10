@@ -1,0 +1,244 @@
+# Hecate
+
+Confidential intent execution for autonomous agents — a TEE-mediated private
+batch-crossing engine for ETH/USDC.
+
+> **Research / MVP.** Not a production system. Receipts produced under
+> `RUNTIME_MODE=LOCAL_MOCK` are research artifacts and do not move real funds.
+> See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) and
+> [docs/SOLVENCY_AND_VAULTS.md](docs/SOLVENCY_AND_VAULTS.md) for the full claim
+> surface.
+
+## What Hecate is
+
+- An API-first private batch-crossing engine for autonomous-agent intents.
+- A specific, narrow exploration: can a TEE-mediated matcher reduce *pre-match
+  inspection* of richer-than-swap execution constraints (limit, partial-fill,
+  min fill, deadlines, fallbacks, max impact) by operators, solvers, and
+  unmatched counterparties?
+- Trust-reduced confidential execution. Every claim is bounded and explicit.
+- Verifiable: every batch produces signed public batch receipts plus per-agent
+  signed fill receipts. Tampering with any field invalidates verification.
+
+## What Hecate is not
+
+- Not a fully trustless private exchange. The TEE is a trust assumption, not a
+  cryptographic guarantee.
+- Not a production system. v1 runs LOCAL_MOCK only.
+- Not a CoW / UniswapX / Angstrom / Renegade replacement. Different point in
+  the design space — see [docs/COMPARISONS.md](docs/COMPARISONS.md).
+- Does not solve MEV, executed-flow inference, or behavioral fingerprinting.
+- Does not hide strategy over time. Settled flow is public.
+- Does not prove agent solvency without a vault or settlement mechanism. The
+  v1 vault is a mock prefunded ledger.
+
+## Quickstart
+
+```sh
+npm install
+cp .env.example .env       # then edit ENGINE_PRIVATE_KEY etc.
+npm run dev                # terminal 1
+npm run simulate -- --reset-demo-state --data-dir ./data   # terminal 2
+```
+
+Defaults that work out of the box:
+
+```
+ENGINE_PRIVATE_KEY=0x0000000000000000000000000000000000000000000000000000000000000001
+CODE_DIGEST=sha256:dev-local
+DATA_DIR=./data
+RUNTIME_MODE=LOCAL_MOCK
+HOST=127.0.0.1
+PORT=8787
+```
+
+## Expected demo output
+
+The simulator runs four agents (A, B, C, D), exercises owner-gated endpoints,
+and asserts every locked outcome:
+
+```
+Batch close:
+  ✓ batch closed: clearing_price=3590, num_matched=3
+  intent_Agent_A_... FILLED filled_base=10
+  intent_Agent_B_... FILLED filled_base=4
+  intent_Agent_C_... PARTIALLY_FILLED filled_base=6
+
+Verification:
+  ✓ full-bundle verification: ok
+
+Owner-gated access:
+  ✓ Agent A fetched their own fill receipt
+  ✓ cross-agent fetch correctly rejected (Agent B → Agent A's receipt) → NOT_RECEIPT_OWNER
+
+Final balances:
+  Agent A: ETH=0,  USDC=35900
+  Agent B: ETH=4,  USDC=5640
+  Agent C: ETH=6,  USDC=8460
+  Agent D: ETH=0,  USDC=100      (rejected: INSUFFICIENT_FUNDS)
+
+✓ demo complete: every expected outcome matched
+```
+
+Full walkthrough: [docs/DEMO.md](docs/DEMO.md).
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `npm install` | Install dependencies |
+| `npm run dev` | Start the Fastify server with file watching |
+| `npm start` | Start the server (no watch) |
+| `npm run simulate` | Run the demo CLI against the running server |
+| `npm run verify` | Verifier replay CLI on a saved bundle (see `agents/replay.ts`) |
+| `npm test` | Run the full vitest suite (≈ 30 s) |
+| `npm run test:soak` | 30-cycle deterministic soak test |
+| `npm run test:coverage` | Suite + v8 coverage report |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run docker:build` | Build the Docker image (`hecate:dev`) |
+| `npm run docker:run` | Run the container locally on port 8787 |
+| `npm run docker:smoke` | Build + run container + simulate + verify + tamper |
+
+## Run in Docker
+
+```sh
+npm run docker:build
+npm run docker:run                # in one terminal
+npm run simulate                  # in another, against the container
+
+# or one-command end-to-end smoke:
+npm run docker:smoke
+```
+
+The container is research/MVP packaging — single-stage Node 20 slim, `tsx`
+in the image, no compiled dist. The default `docker:run` includes a dev
+`ENGINE_PRIVATE_KEY` for first-run convenience; production deployments
+override it. See [docs/EIGEN_DEPLOYMENT.md](docs/EIGEN_DEPLOYMENT.md) for
+the full Eigen-deployment plan.
+
+## Eigen deployment prep
+
+Hecate is Eigen-ready as of Ticket 20. The `Dockerfile`, env-var contract,
+strict EIGEN_TEE startup, and signer-honesty story are all in place. Actual
+deployment to EigenCompute is Ticket 21. Even on Eigen, v1 holds **no real
+funds** and signs receipts with a local engine key (`signer.mode =
+"LOCAL_DEV_KEY"` in `/attestation`). Real Eigen app-wallet signing is future
+work — see [docs/EIGEN_DEPLOYMENT.md](docs/EIGEN_DEPLOYMENT.md) §8.
+
+## Runtime modes
+
+- **`LOCAL_MOCK`** (default). Fully working v1. AES-GCM mock encryption with a
+  locally-derived key — architectural, not security. The whole stack runs
+  offline; receipts produced under LOCAL_MOCK are research artifacts.
+- **`EIGEN_TEE`** (strict stub in v1). The server refuses to start unless
+  `EIGENCOMPUTE_APP_ID`, `EIGENCOMPUTE_IMAGE_DIGEST`, and
+  `EIGENCOMPUTE_ATTESTATION_ID` are all set. Real Eigen attestation chain
+  verification is future work; v1 only checks metadata coherence.
+
+## Privacy and threat-model summary
+
+Hecate's privacy claim is narrow and explicit. The TEE-mediated matcher can
+mitigate pre-match inspection of rich agent constraints by operators, solvers,
+and unmatched counterparties. It binds receipt signing to an attested code
+digest so a tampered binary cannot produce verifying receipts. It does not
+provide ZK-grade privacy, does not hide strategy over time, does not address
+hardware side-channel attacks, and does not solve MEV.
+
+Full threat model: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+
+## Owner-gated endpoints
+
+Per-intent private artifacts (fill receipts, intent status) are accessible only
+to the owning agent via a signed challenge:
+
+```
+challenge = canonicalJson({
+  action: "GET_FILL_RECEIPT" | "GET_INTENT_STATUS",
+  intent_id,
+  timestamp_ms          // ±60s window
+})
+signature = signHash(keccak256(challenge), agent_private_key)
+```
+
+The action field scopes the signature so a `GET_INTENT_STATUS` signature
+cannot be replayed at the `GET_FILL_RECEIPT` endpoint. The intent_id binds
+the signature so a challenge for `intent_a` cannot fetch `intent_b` even by
+the same agent. See [docs/API.md](docs/API.md) for the full protocol and
+[tests/adversarial.access.test.ts](tests/adversarial.access.test.ts) for the
+abuse cases.
+
+## Limitations
+
+- **LOCAL_MOCK encryption is architectural, not security.** Anyone with
+  process-level access to the server can read decrypted payloads. EIGEN_TEE
+  would change this; v1 does not implement it.
+- **No real Eigen attestation chain verification.** Only metadata coherence.
+- **In-memory ready pool.** If the server restarts after `acceptIntent`
+  succeeded but before the next batch close, the decrypted payload is lost.
+  Reservations remain in `vault.json` / `reservations.json`. Future hardening
+  via a `ready.jsonl` is on the [roadmap](docs/ROADMAP.md).
+- **No production custody.** v1 vault is a mock ledger.
+- **The clearing price is public.** If a submitted limit price becomes the
+  binding clearing price, that limit may be inferable from public batch
+  outputs. Hecate mitigates pre-match inspection of private payloads; it does
+  not guarantee that all private constraints remain hidden after execution.
+- **Submitter identity is not private.** The envelope reveals `agent_id`.
+- **Counterparty learns from own fill.** Pairwise inference is unavoidable
+  for any matcher that publishes settlement.
+- **Single-process single-mutex.** Multi-process / multi-host concurrency
+  out of scope.
+
+## Verifier replay demo
+
+The simulator demonstrates the *honest* path. The replay CLI demonstrates that
+the integrity claim is falsifiable on demand:
+
+```sh
+# 1. Run demo and save the close-batch bundle to disk.
+npm run simulate -- --reset-demo-state --data-dir ./data --save-bundle ./data/last-bundle.json
+
+# 2. Replay the honest bundle through verifyFullBatch:
+npm run verify -- ./data/last-bundle.json
+
+# 3. Run any of the 14 built-in tamper scenarios:
+npm run verify -- ./data/last-bundle.json --scenario clearing-price
+npm run verify -- ./data/last-bundle.json --scenario wrong-key
+npm run verify -- ./data/last-bundle.json --scenario list
+
+# 4. One-command run of all scenarios:
+bash scripts/demo-replay.sh
+```
+
+The `wrong-key` scenario is the strongest single-screen demo: rebuild the
+batch receipt body unchanged, sign it with a different key — every structural
+field still matches, but `ENGINE_SIGNER_MISMATCH` fires on the authority check.
+See [docs/DEMO.md](docs/DEMO.md) for the full tamper table.
+
+## Project status
+
+- **646** vitest cases passing across **46** files.
+- **93%** branch coverage; 84% statement coverage (entrypoint files excluded).
+- **30**-cycle deterministic soak test (`npm run test:soak`).
+- **8** adversarial test files (~78 cases) covering matching, settlement,
+  vault, receipts, access control, persistence corruption, decimal boundaries,
+  and full-flow API abuse.
+- **14** tamper scenarios in the verifier replay CLI; full demo passes
+  honest-then-attack via `scripts/demo-replay.sh`.
+- **4**-agent demo verified end-to-end via the live HTTP API.
+
+## Documentation
+
+- [Technical paper](docs/TECHNICAL_PAPER.md) — design, claims, limitations
+- [Threat model](docs/THREAT_MODEL.md) — what the TEE helps with and does not
+- [Architecture](docs/ARCHITECTURE.md) — system + module + data-flow overview
+- [API](docs/API.md) — endpoint catalog + signed-challenge protocol
+- [Receipts](docs/RECEIPTS.md) — batch + fill receipt fields and verification
+- [Solvency and vaults](docs/SOLVENCY_AND_VAULTS.md) — why solvency is
+  separate from TEE correctness; v1 vs production vault tradeoffs
+- [Comparisons](docs/COMPARISONS.md) — vs CoW, UniswapX, Angstrom, Shutter,
+  Renegade
+- [Demo](docs/DEMO.md) — exact commands and expected output
+- [Eigen deployment](docs/EIGEN_DEPLOYMENT.md) — Docker prep + planned Eigen flow
+- [Roadmap](docs/ROADMAP.md) — future work
+
+License: not specified yet.

@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+.env
+.env.local
+data/*.jsonl
+data/vault.json
+data/reservations.json
+data/last-bundle.json
+data/docker-bundle.json
+*.log
+.DS_Store
+.vscode
+.git
+.gitignore
+.github

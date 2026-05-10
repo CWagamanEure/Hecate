@@ -1,0 +1,554 @@
+/**
+ * Hecate end-to-end demo.
+ *
+ * Drives the running HTTP server through the full 4-agent flow, fetches
+ * owner-gated artifacts via signed challenges, runs the cross-agent privacy
+ * assertion, and self-validates against expected_outcome in each fixture.
+ *
+ * Critical-path side effects go through HTTP. Shared module imports are
+ * limited to client-side cryptographic construction:
+ *   - signEnvelope, hashPayload, mockEncryptPayload, deriveMockEnclaveKey
+ *   - privateKeyToAddress, signHash, keccak256Hex, canonicalJson
+ *   - the FILES filename constants for --reset-demo-state
+ *
+ * No matcher / settlement / receipt / verify / vault / persistence-mutation
+ * imports.
+ */
+
+import { readFile, rm, writeFile, mkdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { dirname, join, resolve } from "node:path";
+import {
+  signEnvelope,
+  hashPayload,
+  mockEncryptPayload,
+  deriveMockEnclaveKey,
+  privateKeyToAddress,
+  signHash,
+  keccak256Hex,
+  canonicalJson
+} from "@shared/crypto";
+import { FILES } from "@shared/persistence";
+import {
+  AgentFixture,
+  type AgentExpectedOutcome
+} from "./types";
+import type {
+  PrivatePayload,
+  PublicEnvelope,
+  PublicEnvelopeUnsigned,
+  Hex32,
+  Hex65,
+  HexAddress,
+  HexBytes,
+  FillReceipt
+} from "@shared/schemas";
+
+const FIXTURE_FILES = [
+  "agentA.json",
+  "agentB.json",
+  "agentC.json",
+  "agentD.json"
+] as const;
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const FIXTURE_DIR = resolve(HERE, "examples");
+
+export type RunDemoOptions = {
+  baseUrl: string;
+  codeDigest: string;
+  reset: boolean;
+  dataDir: string | undefined;
+  verbose: boolean;
+  saveBundle: string | undefined;
+};
+
+export type RunDemoResult = { ok: true } | { ok: false; error: string };
+
+class DemoMismatch extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DemoMismatch";
+  }
+}
+
+// ---- HTTP helpers ----------------------------------------------------------
+
+async function fetchJson(
+  baseUrl: string,
+  method: string,
+  path: string,
+  body?: unknown
+): Promise<unknown> {
+  const r = await safeFetch(baseUrl, method, path, body);
+  if (r.status >= 400) {
+    throw new Error(
+      `HTTP ${r.status} ${method} ${path}: ${JSON.stringify(r.body)}`
+    );
+  }
+  return r.body;
+}
+
+async function fetchJsonNoThrow(
+  baseUrl: string,
+  method: string,
+  path: string,
+  body?: unknown
+): Promise<{ status: number; body: any }> {
+  return safeFetch(baseUrl, method, path, body);
+}
+
+async function safeFetch(
+  baseUrl: string,
+  method: string,
+  path: string,
+  body?: unknown
+): Promise<{ status: number; body: any }> {
+  let res: Response;
+  const init: RequestInit = { method };
+  if (body !== undefined) {
+    init.headers = { "content-type": "application/json" };
+    init.body = JSON.stringify(body);
+  }
+  try {
+    res = await fetch(baseUrl + path, init);
+  } catch (e) {
+    throw new Error(
+      `could not reach Hecate server at ${baseUrl} (${(e as Error).message}). Is \`npm run dev\` running?`
+    );
+  }
+  const text = await res.text();
+  let parsed: any = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = text;
+    }
+  }
+  return { status: res.status, body: parsed };
+}
+
+// ---- challenge signing -----------------------------------------------------
+
+function signChallenge(
+  action: "GET_FILL_RECEIPT" | "GET_INTENT_STATUS",
+  intent_id: string,
+  pk: Hex32
+): { requester: HexAddress; timestamp_ms: number; signature: Hex65 } {
+  const ts = Date.now();
+  const json = canonicalJson({
+    action,
+    intent_id,
+    timestamp_ms: ts
+  });
+  const hash = keccak256Hex(json);
+  return {
+    requester: privateKeyToAddress(pk),
+    timestamp_ms: ts,
+    signature: signHash(hash, pk)
+  };
+}
+
+// ---- fixture loading -------------------------------------------------------
+
+async function loadFixtures(): Promise<AgentFixture[]> {
+  const out: AgentFixture[] = [];
+  for (const f of FIXTURE_FILES) {
+    const raw = await readFile(join(FIXTURE_DIR, f), "utf-8");
+    const parsed = AgentFixture.parse(JSON.parse(raw));
+    out.push(parsed);
+  }
+  return out;
+}
+
+// ---- output helpers --------------------------------------------------------
+
+function header(text: string): void {
+  const bar = "============================================================";
+  console.log(`\n${bar}\n${text}\n${bar}`);
+}
+function section(title: string): void {
+  console.log(`\n${title}:`);
+}
+function ok(msg: string): void {
+  console.log(`  ✓ ${msg}`);
+}
+function bad(msg: string): void {
+  console.log(`  × ${msg}`);
+}
+function info(msg: string): void {
+  console.log(`  ${msg}`);
+}
+
+// ---- reset -----------------------------------------------------------------
+
+async function resetDemoState(dataDir: string): Promise<void> {
+  const files: string[] = [
+    FILES.intents,
+    FILES.rejections,
+    FILES.batches,
+    FILES.receipts,
+    FILES.vault,
+    FILES.reservations
+  ];
+  for (const f of files) {
+    await rm(join(dataDir, f), { force: true });
+  }
+}
+
+// ---- core flow -------------------------------------------------------------
+
+type Submission = {
+  fixture: AgentFixture;
+  agent_id: HexAddress;
+  intent_id: string;
+  payload: PrivatePayload;
+  envelope: PublicEnvelope;
+  response: { status: number; body: any };
+};
+
+export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
+  try {
+    header(
+      "Hecate demo\nLOCAL_MOCK demo only. No real funds. Mock encryption is architectural, not confidentiality."
+    );
+
+    if (opts.reset) {
+      if (!opts.dataDir) {
+        throw new DemoMismatch("--reset-demo-state requires --data-dir");
+      }
+      await resetDemoState(opts.dataDir);
+      info(`reset demo state in ${opts.dataDir}`);
+    }
+
+    // Attestation.
+    const att = (await fetchJson(opts.baseUrl, "GET", "/attestation")) as {
+      runtime: { runtime_mode: string; engine_code_digest: string };
+      engine_address: HexAddress;
+      matching_rule: string;
+      markets: string[];
+      warning: string | null;
+    };
+    section("Attestation");
+    info(`runtime_mode:    ${att.runtime.runtime_mode}`);
+    info(`engine_address:  ${att.engine_address}`);
+    info(`matching_rule:   ${att.matching_rule}`);
+    info(`market:          ${att.markets.join(", ")}`);
+    if (att.warning) info(`warning:         ${att.warning}`);
+
+    if (att.runtime.engine_code_digest !== opts.codeDigest) {
+      console.log(
+        `\n  ! server CODE_DIGEST=${att.runtime.engine_code_digest} differs from simulator --code-digest=${opts.codeDigest}`
+      );
+      console.log(
+        `  ! payload encryption keys will not agree; expect MALFORMED_PAYLOAD rejections`
+      );
+    }
+
+    // Load fixtures.
+    const fixtures = await loadFixtures();
+
+    // Stale-state warning.
+    let stale = false;
+    for (const fx of fixtures) {
+      const addr = privateKeyToAddress(fx.private_key);
+      const r = (await fetchJson(
+        opts.baseUrl,
+        "GET",
+        `/vault/${addr}`
+      )) as { vault: { balances: { ETH: string; USDC: string } } };
+      if (
+        r.vault.balances.ETH !== "0" ||
+        r.vault.balances.USDC !== "0"
+      ) {
+        stale = true;
+      }
+    }
+    if (stale) {
+      console.log(
+        "\n  ! Existing demo balances detected. For deterministic expected balances, rerun with"
+      );
+      console.log(
+        "    --reset-demo-state --data-dir <server DATA_DIR>  or use a fresh DATA_DIR."
+      );
+    }
+
+    // Deposits.
+    section("Deposits");
+    for (const fx of fixtures) {
+      const addr = privateKeyToAddress(fx.private_key);
+      for (const dep of fx.deposits) {
+        await fetchJson(opts.baseUrl, "POST", "/vault/mock-deposit", {
+          agent_id: addr,
+          asset: dep.asset,
+          amount: dep.amount
+        });
+      }
+      ok(
+        `deposited ${fx.deposits
+          .map((d) => `${d.amount} ${d.asset}`)
+          .join(", ")} for ${fx.name} (${addr})`
+      );
+    }
+
+    // Submit intents.
+    section("Intent submissions");
+    const enclaveKey = deriveMockEnclaveKey(opts.codeDigest);
+    const submissions: Submission[] = [];
+    const runId = Date.now();
+
+    for (const [i, fx] of fixtures.entries()) {
+      const addr = privateKeyToAddress(fx.private_key);
+      const intent_id = `intent_${fx.name.replace(/\s+/g, "_")}_${runId}_${i}`;
+      const nonce = `${runId}_${i}`;
+      const payload: PrivatePayload = { ...fx.intent, nonce };
+      const ciphertext: HexBytes = mockEncryptPayload(payload, enclaveKey);
+      const unsigned: PublicEnvelopeUnsigned = {
+        intent_id,
+        agent_id: addr,
+        market: "ETH/USDC",
+        expiry_ms: Date.now() + 5 * 60_000,
+        payload_commitment: hashPayload(payload),
+        payload_ciphertext: ciphertext,
+        nonce
+      };
+      const envelope = signEnvelope(unsigned, fx.private_key);
+      const r = await fetchJsonNoThrow(opts.baseUrl, "POST", "/intents", envelope);
+      submissions.push({
+        fixture: fx,
+        agent_id: addr,
+        intent_id,
+        payload,
+        envelope,
+        response: r
+      });
+
+      if (r.status === 200 && r.body?.ok) {
+        ok(`${fx.name} accepted (intent_id=${intent_id})`);
+      } else {
+        bad(
+          `${fx.name} rejected: ${r.body?.error?.code} ${r.body?.error?.detail ?? ""}`
+        );
+      }
+    }
+
+    // Self-validate accepted/rejected against expected_outcome.
+    for (const sub of submissions) {
+      const accepted = sub.response.status === 200 && sub.response.body?.ok === true;
+      const exp = sub.fixture.expected_outcome;
+      if (accepted !== exp.accepted) {
+        throw new DemoMismatch(
+          `${sub.fixture.name}: expected accepted=${exp.accepted}, got ${accepted}`
+        );
+      }
+      if (!accepted && exp.reject_reason !== sub.response.body?.error?.code) {
+        throw new DemoMismatch(
+          `${sub.fixture.name}: expected reject_reason=${exp.reject_reason}, got ${sub.response.body?.error?.code}`
+        );
+      }
+    }
+
+    // Close batch.
+    const close = (await fetchJson(opts.baseUrl, "POST", "/batches/close", {
+      batch_id: `batch_${runId}`
+    })) as {
+      ok: boolean;
+      closed: boolean;
+      batch_receipt: { batch_id: string; clearing_price: string; num_matched: number };
+      fill_receipts: FillReceipt[];
+      batch: unknown;
+      fill_plan: unknown;
+      settlement: unknown;
+      vault_state_before_settlement: unknown;
+      vault_state_after_settlement: unknown;
+      reservation_book_before_settlement: unknown;
+      reservation_book_after_settlement: unknown;
+    };
+    section("Batch close");
+    if (!close.closed) {
+      throw new DemoMismatch("expected batch.closed=true");
+    }
+    ok(
+      `batch closed: clearing_price=${close.batch_receipt.clearing_price}, num_matched=${close.batch_receipt.num_matched}`
+    );
+    for (const fr of close.fill_receipts) {
+      info(
+        `${fr.intent_id} ${fr.status} filled_base=${fr.filled_base} reserved_released=${JSON.stringify(fr.reserved_released)}`
+      );
+    }
+
+    // Build the verify payload (matches VerifyFullBatchRequest shape).
+    const verifyPayload = {
+      batchReceipt: close.batch_receipt,
+      fillReceipts: close.fill_receipts,
+      batch: close.batch,
+      fillPlan: close.fill_plan,
+      settlement: close.settlement,
+      vaultStateBeforeSettlement: close.vault_state_before_settlement,
+      vaultStateAfterSettlement: close.vault_state_after_settlement,
+      reservationBookBeforeSettlement: close.reservation_book_before_settlement,
+      reservationBookAfterSettlement: close.reservation_book_after_settlement,
+      expectedEngineAddress: att.engine_address
+    };
+
+    // Optionally save the bundle to disk for replay-CLI consumption.
+    if (opts.saveBundle) {
+      await mkdir(dirname(opts.saveBundle), { recursive: true });
+      await writeFile(opts.saveBundle, JSON.stringify(verifyPayload, null, 2), "utf-8");
+      info(`saved bundle to ${opts.saveBundle}`);
+    }
+
+    // Verify the bundle.
+    section("Verification");
+    const verify = (await fetchJson(
+      opts.baseUrl,
+      "POST",
+      "/receipts/verify",
+      verifyPayload
+    )) as { ok: boolean; failures?: unknown[] };
+    if (!verify.ok) {
+      throw new DemoMismatch(
+        `verify failed: ${JSON.stringify(verify.failures)}`
+      );
+    }
+    ok("full-bundle verification: ok");
+
+    // Per-agent fill receipts via signed challenge + status check.
+    section("Owner-gated access");
+    const acceptedSubs = submissions.filter(
+      (s) => s.response.status === 200 && s.response.body?.ok === true
+    );
+    const fillReceiptByIntent = new Map<string, FillReceipt>(
+      close.fill_receipts.map((fr) => [fr.intent_id, fr])
+    );
+
+    for (const sub of acceptedSubs) {
+      const challenge = signChallenge(
+        "GET_FILL_RECEIPT",
+        sub.intent_id,
+        sub.fixture.private_key
+      );
+      const r = (await fetchJson(
+        opts.baseUrl,
+        "POST",
+        `/intents/${sub.intent_id}/fill-receipt`,
+        challenge
+      )) as { ok: boolean; fill_receipt: FillReceipt };
+      if (!r.ok || r.fill_receipt.intent_id !== sub.intent_id) {
+        throw new DemoMismatch(
+          `${sub.fixture.name}: owner fetch returned wrong receipt`
+        );
+      }
+      ok(`${sub.fixture.name} fetched their own fill receipt`);
+
+      // Also probe owner-gated status.
+      const statusChallenge = signChallenge(
+        "GET_INTENT_STATUS",
+        sub.intent_id,
+        sub.fixture.private_key
+      );
+      const sr = (await fetchJson(
+        opts.baseUrl,
+        "POST",
+        `/intents/${sub.intent_id}/status`,
+        statusChallenge
+      )) as { ok: boolean; status: string };
+      const fr = fillReceiptByIntent.get(sub.intent_id)!;
+      if (sr.status !== fr.status) {
+        throw new DemoMismatch(
+          `${sub.fixture.name}: GET_INTENT_STATUS returned ${sr.status}, fill receipt says ${fr.status}`
+        );
+      }
+      ok(`${sub.fixture.name} status (${sr.status}) matches fill receipt`);
+    }
+
+    // Cross-agent privacy assertion: agent[1] tries to fetch agent[0]'s receipt.
+    if (acceptedSubs.length >= 2) {
+      const victim = acceptedSubs[0]!;
+      const attacker = acceptedSubs[1]!;
+      const challenge = signChallenge(
+        "GET_FILL_RECEIPT",
+        victim.intent_id,
+        attacker.fixture.private_key
+      );
+      const r = await fetchJsonNoThrow(
+        opts.baseUrl,
+        "POST",
+        `/intents/${victim.intent_id}/fill-receipt`,
+        challenge
+      );
+      if (r.status !== 403) {
+        throw new DemoMismatch(
+          `expected cross-agent fetch to 403, got ${r.status}`
+        );
+      }
+      ok(
+        `cross-agent fetch correctly rejected (${attacker.fixture.name} attempting to read ${victim.fixture.name}'s receipt) -> ${r.body?.error?.code}`
+      );
+    }
+
+    // Final balances + per-agent expected_outcome cross-check.
+    section("Final balances");
+    for (const fx of fixtures) {
+      const addr = privateKeyToAddress(fx.private_key);
+      const r = (await fetchJson(
+        opts.baseUrl,
+        "GET",
+        `/vault/${addr}`
+      )) as { vault: { balances: { ETH: string; USDC: string } } };
+      info(
+        `${fx.name}: ETH=${r.vault.balances.ETH}, USDC=${r.vault.balances.USDC}`
+      );
+      assertExpectedBalances(fx.name, r.vault.balances, fx.expected_outcome);
+    }
+
+    // Final fill receipt status / filled_base check for accepted intents.
+    for (const sub of acceptedSubs) {
+      const fr = fillReceiptByIntent.get(sub.intent_id);
+      const exp = sub.fixture.expected_outcome;
+      if (!fr) {
+        throw new DemoMismatch(
+          `${sub.fixture.name}: no fill receipt for accepted intent`
+        );
+      }
+      if (exp.final_status !== null && fr.status !== exp.final_status) {
+        throw new DemoMismatch(
+          `${sub.fixture.name}: expected status=${exp.final_status}, got ${fr.status}`
+        );
+      }
+      if (exp.final_filled_base !== null && fr.filled_base !== exp.final_filled_base) {
+        throw new DemoMismatch(
+          `${sub.fixture.name}: expected filled_base=${exp.final_filled_base}, got ${fr.filled_base}`
+        );
+      }
+    }
+
+    console.log("\n✓ demo complete: every expected outcome matched\n");
+    return { ok: true };
+  } catch (e) {
+    const msg = (e as Error).message;
+    console.log(`\n× ${msg}\n`);
+    return { ok: false, error: msg };
+  }
+}
+
+function assertExpectedBalances(
+  name: string,
+  balances: { ETH: string; USDC: string },
+  exp: AgentExpectedOutcome
+): void {
+  if (exp.final_balance_eth !== null && balances.ETH !== exp.final_balance_eth) {
+    throw new DemoMismatch(
+      `${name}: expected ETH=${exp.final_balance_eth}, got ${balances.ETH}`
+    );
+  }
+  if (
+    exp.final_balance_usdc !== null &&
+    balances.USDC !== exp.final_balance_usdc
+  ) {
+    throw new DemoMismatch(
+      `${name}: expected USDC=${exp.final_balance_usdc}, got ${balances.USDC}`
+    );
+  }
+}

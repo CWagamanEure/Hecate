@@ -1,0 +1,25 @@
+{
+  "name": "Agent C",
+  "private_key": "0x0000000000000000000000000000000000000000000000000000000000000004",
+  "deposits": [{ "asset": "USDC", "amount": "30000" }],
+  "intent": {
+    "side": "BUY",
+    "asset_in": "USDC",
+    "asset_out": "ETH",
+    "max_base_amount": "8",
+    "limit_price": "3590",
+    "allow_partial_fill": true,
+    "min_base_fill_amount": "1",
+    "deadline_batches": 3,
+    "max_price_impact_bps": 10000,
+    "fallback_after_batches": null
+  },
+  "expected_outcome": {
+    "accepted": true,
+    "reject_reason": null,
+    "final_status": "PARTIALLY_FILLED",
+    "final_filled_base": "6",
+    "final_balance_eth": "6",
+    "final_balance_usdc": "8460"
+  }
+}

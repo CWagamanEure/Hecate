@@ -1,0 +1,25 @@
+{
+  "name": "Agent A",
+  "private_key": "0x0000000000000000000000000000000000000000000000000000000000000002",
+  "deposits": [{ "asset": "ETH", "amount": "10" }],
+  "intent": {
+    "side": "SELL",
+    "asset_in": "ETH",
+    "asset_out": "USDC",
+    "max_base_amount": "10",
+    "limit_price": "3580",
+    "allow_partial_fill": true,
+    "min_base_fill_amount": "3",
+    "deadline_batches": 3,
+    "max_price_impact_bps": 10000,
+    "fallback_after_batches": null
+  },
+  "expected_outcome": {
+    "accepted": true,
+    "reject_reason": null,
+    "final_status": "FILLED",
+    "final_filled_base": "10",
+    "final_balance_eth": "0",
+    "final_balance_usdc": "35900"
+  }
+}
