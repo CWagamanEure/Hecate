@@ -1,0 +1,25 @@
+{
+  "name": "Alice (adversary-mode victim)",
+  "private_key": "0x000000000000000000000000000000000000000000000000000000000000000a",
+  "deposits": [{ "asset": "ETH", "amount": "2" }],
+  "intent": {
+    "side": "SELL",
+    "asset_in": "ETH",
+    "asset_out": "USDC",
+    "max_base_amount": "2",
+    "limit_price": "3580",
+    "allow_partial_fill": false,
+    "min_base_fill_amount": "2",
+    "deadline_batches": 3,
+    "max_price_impact_bps": 10000,
+    "fallback_after_batches": null
+  },
+  "expected_outcome": {
+    "accepted": true,
+    "reject_reason": null,
+    "final_status": "FILLED",
+    "final_filled_base": "2",
+    "final_balance_eth": "0",
+    "final_balance_usdc": "7160"
+  }
+}

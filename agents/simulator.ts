@@ -38,6 +38,11 @@ Options:
                               with three fixtures crafted to exercise the matcher's
                               per-intent unfilled-reason discrimination (mix of
                               MIN_FILL_NOT_MET and INSUFFICIENT_OPPOSITE_FLOW_WITHIN_LIMIT)
+  --include-adversary         after the canonical demo, run an isolated batch where
+                              Alice and Mallory cross, then exercise 6 attack attempts
+                              against Alice's data and signatures (THREAT_MODEL §5.3).
+                              Two attempts succeed (own data, public batch receipt);
+                              four are rejected with their specific error codes.
   --verbose                   extra output
   --help                      show this help
 
@@ -55,6 +60,7 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
   let saveBundle: string | undefined;
   let allowDigestMismatch = false;
   let includeFailureFixture = false;
+  let includeAdversary = false;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -83,6 +89,9 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
       case "--include-failure-fixture":
         includeFailureFixture = true;
         break;
+      case "--include-adversary":
+        includeAdversary = true;
+        break;
       case "--verbose":
         verbose = true;
         break;
@@ -103,7 +112,8 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
     verbose,
     saveBundle,
     allowDigestMismatch,
-    includeFailureFixture
+    includeFailureFixture,
+    includeAdversary
   };
 }
 

@@ -63,6 +63,7 @@ export type RunDemoOptions = {
   saveBundle: string | undefined;
   allowDigestMismatch: boolean;
   includeFailureFixture: boolean;
+  includeAdversary: boolean;
 };
 
 export type RunDemoResult = { ok: true } | { ok: false; error: string };
@@ -177,6 +178,20 @@ async function loadFailureFixtures(): Promise<AgentFixture[]> {
     out.push(AgentFixture.parse(JSON.parse(raw)));
   }
   return out;
+}
+
+const ADVERSARY_FIXTURE_FILES = [
+  "adv-alice.json",
+  "adv-mallory.json"
+] as const;
+
+async function loadAdversaryFixtures(): Promise<[AgentFixture, AgentFixture]> {
+  const out: AgentFixture[] = [];
+  for (const f of ADVERSARY_FIXTURE_FILES) {
+    const raw = await readFile(join(FIXTURE_DIR, f), "utf-8");
+    out.push(AgentFixture.parse(JSON.parse(raw)));
+  }
+  return [out[0]!, out[1]!];
 }
 
 // ---- output helpers --------------------------------------------------------
@@ -631,6 +646,15 @@ export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
       });
     }
 
+    if (opts.includeAdversary) {
+      await runAdversaryBatch({
+        baseUrl: opts.baseUrl,
+        enclaveKey,
+        engineAddress: att.engine_address,
+        runId
+      });
+    }
+
     console.log("\n✓ demo complete: every expected outcome matched\n");
     return { ok: true };
   } catch (e) {
@@ -823,6 +847,289 @@ async function runFailureModeBatch(args: {
     info(
       `${fx.name}: ETH=${r.vault.balances.ETH}, USDC=${r.vault.balances.USDC}`
     );
+    assertExpectedBalances(fx.name, r.vault.balances, fx.expected_outcome);
+  }
+}
+
+/**
+ * Optional adversary segment. Runs after the canonical demo (and after the
+ * failure-mode batch if --include-failure-fixture is also set). Two new
+ * fixtures cross cleanly in their own batch: Alice (SELL 2 ETH @ 3580) and
+ * Mallory (BUY 2 ETH @ 3600). After settlement, Mallory plays the matched-
+ * counterparty adversary role from THREAT_MODEL §5.3:
+ *
+ *   ✓ reads her own fill receipt              (matched participant access)
+ *   ✓ reads the public batch receipt          (aggregate public info)
+ *   ✗ tries to read Alice's fill receipt      → NOT_RECEIPT_OWNER
+ *   ✗ tries to read Alice's intent status     → NOT_INTENT_OWNER
+ *   ✗ tries to submit an envelope forged with agent_id=Alice
+ *                                              → INVALID_SIGNATURE (at submission)
+ *   ✗ tampers the `requester` field of an otherwise-valid challenge
+ *                                              → INVALID_REQUEST_SIGNATURE
+ */
+async function runAdversaryBatch(args: {
+  baseUrl: string;
+  enclaveKey: Uint8Array;
+  engineAddress: HexAddress;
+  runId: number;
+}): Promise<void> {
+  const { baseUrl, enclaveKey, engineAddress, runId } = args;
+  const [alice, mallory] = await loadAdversaryFixtures();
+
+  section("Adversary scenarios (optional)");
+  info(
+    "isolated batch between Alice (victim) and Mallory (matched counterparty, THREAT_MODEL §5.3)"
+  );
+
+  // Deposits.
+  for (const fx of [alice, mallory]) {
+    const addr = privateKeyToAddress(fx.private_key);
+    for (const dep of fx.deposits) {
+      await fetchJson(baseUrl, "POST", "/vault/mock-deposit", {
+        agent_id: addr,
+        asset: dep.asset,
+        amount: dep.amount
+      });
+    }
+    ok(
+      `deposited ${fx.deposits.map((d) => `${d.amount} ${d.asset}`).join(", ")} for ${fx.name} (${addr})`
+    );
+  }
+
+  // Submissions: Alice first, then Mallory. Both legitimate.
+  const subs: Array<{
+    fx: AgentFixture;
+    addr: HexAddress;
+    intent_id: string;
+    nonce: string;
+  }> = [];
+  for (const [i, fx] of [alice, mallory].entries()) {
+    const addr = privateKeyToAddress(fx.private_key);
+    const intent_id = `intent_adv_${fx.name.startsWith("Alice") ? "alice" : "mallory"}_${runId}`;
+    const nonce = `${runId}_adv_${i}`;
+    const payload: PrivatePayload = { ...fx.intent, nonce };
+    const ciphertext: HexBytes = mockEncryptPayload(payload, enclaveKey);
+    const unsigned: PublicEnvelopeUnsigned = {
+      intent_id,
+      agent_id: addr,
+      market: "ETH/USDC",
+      expiry_ms: Date.now() + 5 * 60_000,
+      payload_commitment: hashPayload(payload),
+      payload_ciphertext: ciphertext,
+      nonce
+    };
+    const envelope = signEnvelope(unsigned, fx.private_key);
+    const r = await fetchJsonNoThrow(baseUrl, "POST", "/intents", envelope);
+    if (r.status !== 200 || r.body?.ok !== true) {
+      throw new DemoMismatch(
+        `adversary: ${fx.name} expected accepted, got ${r.status} ${r.body?.error?.code}`
+      );
+    }
+    ok(`${fx.name} accepted (intent_id=${intent_id})`);
+    subs.push({ fx, addr, intent_id, nonce });
+  }
+  const [aliceSub, mallorySub] = subs as [(typeof subs)[0], (typeof subs)[0]];
+
+  // Close the adversary batch.
+  const batch_id = `batch_${runId}_adversary`;
+  const close = (await fetchJson(baseUrl, "POST", "/batches/close", {
+    batch_id
+  })) as {
+    ok: boolean;
+    closed: boolean;
+    batch_receipt: {
+      batch_id: string;
+      clearing_price: string;
+      num_matched: number;
+    };
+    fill_receipts: FillReceipt[];
+    batch: unknown;
+    fill_plan: unknown;
+    settlement: unknown;
+    vault_state_before_settlement: unknown;
+    vault_state_after_settlement: unknown;
+    reservation_book_before_settlement: unknown;
+    reservation_book_after_settlement: unknown;
+  };
+  if (!close.closed) throw new DemoMismatch("adversary: batch not closed");
+  if (close.batch_receipt.num_matched !== 2) {
+    throw new DemoMismatch(
+      `adversary: expected num_matched=2, got ${close.batch_receipt.num_matched}`
+    );
+  }
+  ok(
+    `adversary batch closed: clearing_price=${close.batch_receipt.clearing_price}, num_matched=2`
+  );
+
+  // Verify the adversary bundle.
+  const verifyPayload = {
+    batchReceipt: close.batch_receipt,
+    fillReceipts: close.fill_receipts,
+    batch: close.batch,
+    fillPlan: close.fill_plan,
+    settlement: close.settlement,
+    vaultStateBeforeSettlement: close.vault_state_before_settlement,
+    vaultStateAfterSettlement: close.vault_state_after_settlement,
+    reservationBookBeforeSettlement: close.reservation_book_before_settlement,
+    reservationBookAfterSettlement: close.reservation_book_after_settlement,
+    expectedEngineAddress: engineAddress
+  };
+  const verify = (await fetchJson(
+    baseUrl,
+    "POST",
+    "/receipts/verify",
+    verifyPayload
+  )) as { ok: boolean; failures?: unknown[]; bundle_id: string };
+  if (!verify.ok) {
+    throw new DemoMismatch(
+      `adversary bundle verification failed: ${JSON.stringify(verify.failures)}`
+    );
+  }
+  ok(`adversary bundle verified (bundle_id=${verify.bundle_id})`);
+
+  // ATTEMPT 1: Mallory reads her own fill receipt — SUCCESS.
+  section("Mallory's attempts");
+  const ownChallenge = signChallenge(
+    "GET_FILL_RECEIPT",
+    mallorySub.intent_id,
+    mallorySub.fx.private_key
+  );
+  const a1 = await fetchJsonNoThrow(
+    baseUrl,
+    "POST",
+    `/intents/${mallorySub.intent_id}/fill-receipt`,
+    ownChallenge
+  );
+  if (a1.status !== 200 || a1.body?.ok !== true) {
+    throw new DemoMismatch(
+      `adversary attempt 1: expected own fill-receipt read to succeed, got ${a1.status} ${a1.body?.error?.code}`
+    );
+  }
+  ok("[1] Mallory reads her own fill receipt → 200 (matched participants have full access to own data)");
+
+  // ATTEMPT 2: Public batch receipt — SUCCESS, reveals only public fields.
+  const a2 = await fetchJsonNoThrow(
+    baseUrl,
+    "GET",
+    `/batches/${batch_id}/receipt`
+  );
+  if (a2.status !== 200 || a2.body?.ok !== true) {
+    throw new DemoMismatch(
+      `adversary attempt 2: expected public batch receipt to be readable, got ${a2.status}`
+    );
+  }
+  if (a2.body.batch_receipt?.batch_id !== batch_id) {
+    throw new DemoMismatch(
+      "adversary attempt 2: public batch receipt returned wrong batch"
+    );
+  }
+  if ("fill_receipts" in (a2.body as object)) {
+    throw new DemoMismatch(
+      "adversary attempt 2: public batch receipt response contained per-agent fill_receipts (privacy regression)"
+    );
+  }
+  ok(
+    `[2] Mallory reads public batch receipt → 200 (clearing_price=${a2.body.batch_receipt.clearing_price}, num_matched=${a2.body.batch_receipt.num_matched}; no per-agent fills exposed)`
+  );
+
+  // ATTEMPT 3: Mallory tries to read Alice's fill receipt → 403 NOT_RECEIPT_OWNER.
+  const a3Challenge = signChallenge(
+    "GET_FILL_RECEIPT",
+    aliceSub.intent_id,
+    mallorySub.fx.private_key
+  );
+  const a3 = await fetchJsonNoThrow(
+    baseUrl,
+    "POST",
+    `/intents/${aliceSub.intent_id}/fill-receipt`,
+    a3Challenge
+  );
+  if (a3.status !== 403 || a3.body?.error?.code !== "NOT_RECEIPT_OWNER") {
+    throw new DemoMismatch(
+      `adversary attempt 3: expected 403 NOT_RECEIPT_OWNER, got ${a3.status} ${a3.body?.error?.code}`
+    );
+  }
+  ok("[3] Mallory tries to fetch Alice's fill receipt → 403 NOT_RECEIPT_OWNER");
+
+  // ATTEMPT 4: Mallory tries to read Alice's intent status → 403 NOT_INTENT_OWNER.
+  const a4Challenge = signChallenge(
+    "GET_INTENT_STATUS",
+    aliceSub.intent_id,
+    mallorySub.fx.private_key
+  );
+  const a4 = await fetchJsonNoThrow(
+    baseUrl,
+    "POST",
+    `/intents/${aliceSub.intent_id}/status`,
+    a4Challenge
+  );
+  if (a4.status !== 403 || a4.body?.error?.code !== "NOT_INTENT_OWNER") {
+    throw new DemoMismatch(
+      `adversary attempt 4: expected 403 NOT_INTENT_OWNER, got ${a4.status} ${a4.body?.error?.code}`
+    );
+  }
+  ok("[4] Mallory tries to fetch Alice's intent status → 403 NOT_INTENT_OWNER");
+
+  // ATTEMPT 5: Forged envelope — Mallory crafts an envelope with agent_id=Alice
+  // signed by her own key. Submission-boundary signature recovery catches it.
+  const forgedPayload: PrivatePayload = {
+    ...mallory.intent,
+    nonce: `${runId}_adv_forged`
+  };
+  const forgedCiphertext: HexBytes = mockEncryptPayload(forgedPayload, enclaveKey);
+  const forgedUnsigned: PublicEnvelopeUnsigned = {
+    intent_id: `intent_adv_forged_${runId}`,
+    agent_id: aliceSub.addr, // claim Alice's identity
+    market: "ETH/USDC",
+    expiry_ms: Date.now() + 5 * 60_000,
+    payload_commitment: hashPayload(forgedPayload),
+    payload_ciphertext: forgedCiphertext,
+    nonce: forgedPayload.nonce
+  };
+  const forgedEnvelope = signEnvelope(forgedUnsigned, mallorySub.fx.private_key);
+  const a5 = await fetchJsonNoThrow(
+    baseUrl,
+    "POST",
+    "/intents",
+    forgedEnvelope
+  );
+  if (a5.status !== 400 || a5.body?.error?.code !== "INVALID_SIGNATURE") {
+    throw new DemoMismatch(
+      `adversary attempt 5: expected 400 INVALID_SIGNATURE, got ${a5.status} ${a5.body?.error?.code}`
+    );
+  }
+  ok("[5] Mallory submits envelope with agent_id=Alice (signed by Mallory) → 400 INVALID_SIGNATURE");
+
+  // ATTEMPT 6: Mallory signs a valid challenge for her own intent_id as herself,
+  // then tampers the requester field to Alice's address. Signature recovery
+  // returns Mallory's address; claimed = Alice; mismatch.
+  const a6BaseChallenge = signChallenge(
+    "GET_FILL_RECEIPT",
+    mallorySub.intent_id,
+    mallorySub.fx.private_key
+  );
+  const a6Tampered = { ...a6BaseChallenge, requester: aliceSub.addr };
+  const a6 = await fetchJsonNoThrow(
+    baseUrl,
+    "POST",
+    `/intents/${mallorySub.intent_id}/fill-receipt`,
+    a6Tampered
+  );
+  if (a6.status !== 401 || a6.body?.error?.code !== "INVALID_REQUEST_SIGNATURE") {
+    throw new DemoMismatch(
+      `adversary attempt 6: expected 401 INVALID_REQUEST_SIGNATURE, got ${a6.status} ${a6.body?.error?.code}`
+    );
+  }
+  ok("[6] Mallory tampers challenge.requester to Alice's address → 401 INVALID_REQUEST_SIGNATURE");
+
+  // Final-balance assertions: clean cross, both fully filled.
+  section("Adversary-batch final balances");
+  for (const fx of [alice, mallory]) {
+    const addr = privateKeyToAddress(fx.private_key);
+    const r = (await fetchJson(baseUrl, "GET", `/vault/${addr}`)) as {
+      vault: { balances: { ETH: string; USDC: string } };
+    };
+    info(`${fx.name}: ETH=${r.vault.balances.ETH}, USDC=${r.vault.balances.USDC}`);
     assertExpectedBalances(fx.name, r.vault.balances, fx.expected_outcome);
   }
 }

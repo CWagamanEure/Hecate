@@ -159,6 +159,8 @@ We enumerate concrete adversary classes and what Hecate does and does not provid
 
 *Hecate does not provide:* the counterparty *does* learn at minimum the clearing price, their own fill amount, and the fact that the other side was willing to cross at that price. Repeated matches reveal more.
 
+*Live demo:* `npm run simulate -- --include-adversary` runs an isolated batch with a victim (Alice) and a matched counterparty (Mallory), then asserts what Mallory can and cannot fetch. See [DEMO.md §Adversary scenarios](DEMO.md#adversary-scenarios-optional).
+
 ### 5.4 Solver / filler
 
 *Not present in v1.* If introduced in a future version, the design must specify exactly what they see. Naive integration (handing constraints to fillers to bid on) would defeat the privacy property.

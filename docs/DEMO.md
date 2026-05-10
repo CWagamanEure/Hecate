@@ -230,6 +230,32 @@ failure-batch bundle still verifies — the engine signed the correct refusal.
 The point is to demonstrate the engine's per-intent failure-reason
 discrimination, not engine misbehavior.
 
+### Adversary scenarios (optional)
+
+```sh
+npm run simulate -- --reset-demo-state --data-dir ./data --include-adversary
+```
+
+After the canonical demo, runs an isolated batch where Alice (SELL 2 ETH @
+3580) and Mallory (BUY 2 ETH @ 3600) cross at clearing_price=3580 — both
+FILLED. Then walks through six attack attempts. The first two succeed
+(showing what a matched counterparty CAN see); the next four are rejected
+(showing what they CANNOT). Maps THREAT_MODEL §5.3 (matched-counterparty
+adversary) from documented claim to live segment.
+
+| # | What Mallory does | Expected outcome |
+|---|---|---|
+| 1 | Fetch her own fill receipt | ✓ 200 — matched participants have full access to own data |
+| 2 | `GET /batches/:id/receipt` (public) | ✓ 200 — clearing_price + num_matched + hashes, no per-agent fills |
+| 3 | Fetch Alice's fill receipt with own challenge | ✗ 403 `NOT_RECEIPT_OWNER` |
+| 4 | Fetch Alice's intent status with own challenge | ✗ 403 `NOT_INTENT_OWNER` |
+| 5 | Submit forged envelope with `agent_id=Alice` signed by Mallory's key | ✗ 400 `INVALID_SIGNATURE` (submission boundary) |
+| 6 | Tamper challenge `requester` field to claim Alice's address | ✗ 401 `INVALID_REQUEST_SIGNATURE` |
+
+Each attempt asserts on both status and error code; any drift fails the demo
+loudly. Combine with `--include-failure-fixture` to run all three batches in
+one session.
+
 ### Web verifier panel
 
 While the server is running (`npm run dev`), open
