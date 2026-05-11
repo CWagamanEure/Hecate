@@ -2,6 +2,7 @@ node_modules
 dist
 .env
 .env.local
+.demo-wallets.json
 data/*
 !data/.gitkeep
 *.log
