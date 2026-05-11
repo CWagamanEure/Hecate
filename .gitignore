@@ -13,3 +13,4 @@ contracts/cache/
 contracts/lib/
 contracts/foundry.lock
 contracts/broadcast/
+.gitmodules
