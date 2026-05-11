@@ -25,8 +25,11 @@ ENV NODE_ENV=production \
     RUNTIME_MODE=LOCAL_MOCK \
     CODE_DIGEST=sha256:dev-local
 
-# Drop privileges.
-USER node
+# NOTE: do not set USER node here. EigenCompute wraps this image with its own
+# layer (Caddy, KMS/TLS clients, TEE entrypoint, chmod +x /usr/local/bin/*)
+# that runs as root. Setting a non-root USER here breaks Eigen's wrapper's
+# chmod step. The TEE itself is the security boundary; container-level
+# non-root is moot inside a TEE.
 
 EXPOSE 8787
 
