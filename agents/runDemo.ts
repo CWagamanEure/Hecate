@@ -33,6 +33,7 @@ import {
   AgentFixture,
   type AgentExpectedOutcome
 } from "./types";
+import { loadDemoWallets, type DemoWalletFile } from "./demoWallets";
 import type {
   PrivatePayload,
   PublicEnvelope,
@@ -64,6 +65,16 @@ export type RunDemoOptions = {
   allowDigestMismatch: boolean;
   includeFailureFixture: boolean;
   includeAdversary: boolean;
+  /**
+   * If true, the canonical 4-agent fixtures (A/B/C/D) get their
+   * `private_key` replaced with the corresponding wallet from
+   * `.demo-wallets.json`. Failure / adversary fixtures keep their
+   * hardcoded dev keys. Use this for Sepolia demos where the engine
+   * needs to see intents signed by real on-chain addresses; leave it
+   * false (the default) for local-only / CI / soak runs that don't
+   * care about real wallets.
+   */
+  useDemoWallets: boolean;
 };
 
 export type RunDemoResult = { ok: true } | { ok: false; error: string };
@@ -155,12 +166,52 @@ function signChallenge(
 
 // ---- fixture loading -------------------------------------------------------
 
-async function loadFixtures(): Promise<AgentFixture[]> {
+const CANONICAL_FIXTURE_SLOT: Record<
+  (typeof FIXTURE_FILES)[number],
+  "A" | "B" | "C" | "D"
+> = {
+  "agentA.json": "A",
+  "agentB.json": "B",
+  "agentC.json": "C",
+  "agentD.json": "D"
+};
+
+/**
+ * Pure helper: take an array of canonical fixtures (parsed from
+ * `agents/examples/agent[A-D].json` in fixture-file order) and a wallet
+ * file, return a new array where each fixture's `private_key` is replaced
+ * by the matching wallet's pk. Failure / adversary fixtures are not
+ * touched by this function.
+ *
+ * Exported so the wallet-injection logic can be tested without a server
+ * or filesystem state.
+ */
+export function injectDemoWalletsIntoFixtures(
+  fixturesInFileOrder: AgentFixture[],
+  wallets: DemoWalletFile
+): AgentFixture[] {
+  if (fixturesInFileOrder.length !== FIXTURE_FILES.length) {
+    throw new Error(
+      `injectDemoWalletsIntoFixtures: expected ${FIXTURE_FILES.length} fixtures, got ${fixturesInFileOrder.length}`
+    );
+  }
+  return fixturesInFileOrder.map((fx, i) => {
+    const file = FIXTURE_FILES[i]!;
+    const slot = CANONICAL_FIXTURE_SLOT[file];
+    return { ...fx, private_key: wallets[slot].pk };
+  });
+}
+
+async function loadFixtures(opts?: { useDemoWallets?: boolean }): Promise<AgentFixture[]> {
   const out: AgentFixture[] = [];
   for (const f of FIXTURE_FILES) {
     const raw = await readFile(join(FIXTURE_DIR, f), "utf-8");
     const parsed = AgentFixture.parse(JSON.parse(raw));
     out.push(parsed);
+  }
+  if (opts?.useDemoWallets) {
+    const wallets = await loadDemoWallets();
+    return injectDemoWalletsIntoFixtures(out, wallets);
   }
   return out;
 }
@@ -289,7 +340,7 @@ export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
     }
 
     // Load fixtures.
-    const fixtures = await loadFixtures();
+    const fixtures = await loadFixtures({ useDemoWallets: opts.useDemoWallets });
 
     // Stale-state warning.
     let stale = false;

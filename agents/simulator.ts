@@ -43,6 +43,11 @@ Options:
                               against Alice's data and signatures (THREAT_MODEL §5.3).
                               Two attempts succeed (own data, public batch receipt);
                               four are rejected with their specific error codes.
+  --use-demo-wallets          replace the canonical 4-agent fixtures' hardcoded dev keys
+                              with the wallets in .demo-wallets.json (created by
+                              \`npm run wallets:gen\`). For Sepolia demos where intents
+                              must be signed by real on-chain addresses. Failure /
+                              adversary fixtures are unaffected.
   --verbose                   extra output
   --help                      show this help
 
@@ -61,6 +66,7 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
   let allowDigestMismatch = false;
   let includeFailureFixture = false;
   let includeAdversary = false;
+  let useDemoWallets = false;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -92,6 +98,9 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
       case "--include-adversary":
         includeAdversary = true;
         break;
+      case "--use-demo-wallets":
+        useDemoWallets = true;
+        break;
       case "--verbose":
         verbose = true;
         break;
@@ -113,7 +122,8 @@ function parseArgs(argv: string[]): RunDemoOptions | { help: true } {
     saveBundle,
     allowDigestMismatch,
     includeFailureFixture,
-    includeAdversary
+    includeAdversary,
+    useDemoWallets
   };
 }
 
