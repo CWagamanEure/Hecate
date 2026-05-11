@@ -1,4 +1,5 @@
 import { hexToBytes } from "@noble/hashes/utils";
+import type { Address } from "viem";
 import {
   privateKeyToAddress,
   deriveMockEnclaveKey
@@ -12,9 +13,13 @@ import {
 import {
   VaultState,
   ReservationBook,
-  type RuntimeMetadata
+  type RuntimeMetadata,
+  type HexAddress
 } from "@shared/schemas";
-import type { ServerState } from "./state";
+import { loadSepoliaDeployment } from "@shared/deployments/sepolia";
+import { loadDemoWallets } from "@agents/demoWallets";
+import { loadOnchainVaultState } from "./vault/onchainLoader";
+import type { ServerState, VaultBackend } from "./state";
 
 function parseEngineKey(raw: string | undefined): Uint8Array {
   if (!raw) throw new Error("ENGINE_PRIVATE_KEY not set");
@@ -67,11 +72,31 @@ export async function bootstrap(
 
   await ensureDir(dataDir);
 
-  const vault = await readJsonFile(
-    resolveDataPath(dataDir, FILES.vault),
-    VaultState,
-    { fallback: { agents: {} } }
-  );
+  const vaultBackend = parseVaultBackend(env.VAULT_BACKEND);
+
+  let vault: VaultState;
+  if (vaultBackend === "onchain") {
+    const rpcUrl = resolveSepoliaRpc(env);
+    const deployment = await loadSepoliaDeployment();
+    const wallets = await loadDemoWallets();
+    const agents: HexAddress[] = [
+      wallets.A.addr as HexAddress,
+      wallets.B.addr as HexAddress,
+      wallets.C.addr as HexAddress,
+      wallets.D.addr as HexAddress
+    ];
+    vault = await loadOnchainVaultState({
+      rpcUrl,
+      vaultAddress: deployment.contracts.HecateVault.address as Address,
+      agents
+    });
+  } else {
+    vault = await readJsonFile(
+      resolveDataPath(dataDir, FILES.vault),
+      VaultState,
+      { fallback: { agents: {} } }
+    );
+  }
   const reservationBook = await readJsonFile(
     resolveDataPath(dataDir, FILES.reservations),
     ReservationBook,
@@ -86,6 +111,29 @@ export async function bootstrap(
     mockEnclaveKey,
     vault,
     reservationBook,
-    readyPool: new Map()
+    readyPool: new Map(),
+    vaultBackend
   };
+}
+
+export function parseVaultBackend(raw: string | undefined): VaultBackend {
+  if (raw === undefined || raw === "" || raw === "mock") return "mock";
+  if (raw === "onchain") return "onchain";
+  throw new Error(
+    `VAULT_BACKEND must be "mock" or "onchain", got "${raw}"`
+  );
+}
+
+function resolveSepoliaRpc(env: NodeJS.ProcessEnv): string {
+  // SEPOLIA_RPC_URL takes priority (full URL); else compose from
+  // ALCHEMY_API_KEY. Matches the foundry.toml convention.
+  const direct = env.SEPOLIA_RPC_URL;
+  if (direct) return direct;
+  const key = env.ALCHEMY_API_KEY;
+  if (!key) {
+    throw new Error(
+      "VAULT_BACKEND=onchain requires SEPOLIA_RPC_URL or ALCHEMY_API_KEY in env"
+    );
+  }
+  return `https://eth-sepolia.g.alchemy.com/v2/${key}`;
 }

@@ -50,6 +50,17 @@ export async function vaultRoutes(
   );
 
   app.post("/vault/mock-deposit", async (req, reply) => {
+    if (state.vaultBackend === "onchain") {
+      reply.code(400);
+      return {
+        ok: false,
+        error: {
+          code: "MOCK_DEPOSIT_DISABLED",
+          detail:
+            "VAULT_BACKEND=onchain: use scripts/agents-deposit.ts (or call HecateVault.depositETH / depositUSDC directly) instead of mock-deposit."
+        }
+      };
+    }
     const parse = MockDepositRequest.safeParse(req.body);
     if (!parse.success) {
       reply.code(400);
@@ -80,6 +91,17 @@ export async function vaultRoutes(
   });
 
   app.post("/vault/mock-withdraw", async (req, reply) => {
+    if (state.vaultBackend === "onchain") {
+      reply.code(400);
+      return {
+        ok: false,
+        error: {
+          code: "MOCK_WITHDRAW_DISABLED",
+          detail:
+            "VAULT_BACKEND=onchain: call HecateVault.withdrawETH / withdrawUSDC on-chain directly instead."
+        }
+      };
+    }
     const parse = MockWithdrawRequest.safeParse(req.body);
     if (!parse.success) {
       reply.code(400);

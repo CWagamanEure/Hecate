@@ -6,6 +6,8 @@ import type {
 } from "@shared/schemas";
 import type { ReadyIntent } from "@shared/matching";
 
+export type VaultBackend = "mock" | "onchain";
+
 export type ServerState = {
   dataDir: string;
   runtime: RuntimeMetadata;
@@ -15,6 +17,12 @@ export type ServerState = {
   vault: VaultState;
   reservationBook: ReservationBook;
   readyPool: Map<string, ReadyIntent>;
+  /**
+   * V6b: when "onchain", state.vault is seeded from HecateVault on Sepolia
+   * at startup and the mock-deposit / mock-withdraw routes return 400.
+   * When "mock" (default), behavior is unchanged from v1.
+   */
+  vaultBackend: VaultBackend;
 };
 
 /** Single-process FIFO mutex for serializing state-mutating handlers. */
