@@ -181,10 +181,17 @@ demo today uses the mock vault. A real custody contract,
 [`contracts/HecateVault.sol`](../contracts/HecateVault.sol), is now
 committed to the repo with full Forge coverage (deposit / withdraw /
 signed `settleBatch` with conservation, replay, signature, and
-insolvency guards). It is **not** yet integrated with the engine and
-**not** yet deployed; integration is V2 of the on-chain vault project.
-See [SOLVENCY_AND_VAULTS.md](SOLVENCY_AND_VAULTS.md) for the design and
-[ROADMAP.md §3](ROADMAP.md#3-production-solvency) for the rollout plan.
+insolvency guards), and has been **deployed and verified on Sepolia**
+at [`0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA`](https://sepolia.etherscan.io/address/0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA)
+alongside a 6-decimal demo MockUSDC at [`0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB`](https://sepolia.etherscan.io/address/0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB).
+However, the engine does **not** yet call `settleBatch` on chain — the
+on-chain signature (`engine_signature_onchain`) rides on every bundle
+since V2 stage 1, but actually submitting it to the deployed vault is
+V6 of the on-chain vault project. See
+[SOLVENCY_AND_VAULTS.md](SOLVENCY_AND_VAULTS.md) for the design,
+[deployments/sepolia.json](../deployments/sepolia.json) for the full
+deployment manifest, and [ROADMAP.md §3](ROADMAP.md#3-production-solvency)
+for the rollout plan.
 
 ---
 

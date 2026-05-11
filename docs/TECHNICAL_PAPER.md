@@ -381,8 +381,8 @@ The v1 implementation is a TypeScript Node service plus a CLI agent simulator. S
 - `tests/` — vitest suites for schemas, crypto, vault, matching, settlement, receipts, verify, persistence, server endpoints, plus adversarial / coverage-targeted / soak files.
 - `contracts/` — Solidity contracts and Forge tests:
   - `HecateSettlementVerifier.sol` (ecrecover-based receipt verifier, deployed to Sepolia at `0x0bAcD73a36f774Cb7c2f252a2d3c002A0079D4E2`),
-  - `HecateVault.sol` (production-style prefunded vault with signed `settleBatch`; written, **not** engine-integrated, **not** deployed),
-  - `MockUSDC.sol` (6-decimal ERC-20 used only by the vault tests and a future Sepolia demo).
+  - `HecateVault.sol` (production-style prefunded vault with signed `settleBatch`; deployed to Sepolia at `0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA`, **not** yet engine-integrated),
+  - `MockUSDC.sol` (6-decimal ERC-20 demo token; deployed to Sepolia at `0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB` for the V5+ Sepolia flows).
 
 ### v1 lifecycle (Model A — reserve at submission)
 

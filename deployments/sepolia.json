@@ -1,0 +1,69 @@
+{
+  "chain_id": 11155111,
+  "chain_name": "sepolia",
+  "deployed_at": "2026-05-11T00:00:00Z",
+  "deployer": "0x83B3D967a7d5BEDEd6aECb27752E06810123dE10",
+  "engine_address": "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
+  "note": "V5 of the Hecate on-chain vault project. HecateVault and MockUSDC are written + Forge-tested but NOT yet integrated with the running engine (that's V6). MockUSDC is a 6-decimal demo token with a public mint; do not use these addresses for anything outside the Hecate Sepolia demo.",
+  "contracts": {
+    "HecateSettlementVerifier": {
+      "address": "0x0bAcD73a36f774Cb7c2f252a2d3c002A0079D4E2",
+      "etherscan": "https://sepolia.etherscan.io/address/0x0bAcD73a36f774Cb7c2f252a2d3c002A0079D4E2",
+      "deployed_at_block": null,
+      "verified": true,
+      "purpose": "ecrecover-based receipt verifier. Predates V5; deployed earlier."
+    },
+    "MockUSDC": {
+      "address": "0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB",
+      "etherscan": "https://sepolia.etherscan.io/address/0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB",
+      "deployed_at_block": "10835197",
+      "verified": true,
+      "purpose": "6-decimal ERC-20 with public mint. Used as the USDC leg of the Hecate vault. Demo-only.",
+      "name": "Mock USDC (Hecate demo)",
+      "symbol": "mUSDC",
+      "decimals": 6
+    },
+    "HecateVault": {
+      "address": "0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA",
+      "etherscan": "https://sepolia.etherscan.io/address/0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA",
+      "deployed_at_block": "10835197",
+      "verified": true,
+      "purpose": "Production-style prefunded vault. ENGINE address is immutable, set to the LOCAL_DEV_KEY-derived address.",
+      "constructor_args": {
+        "engine": "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
+        "usdc": "0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB"
+      },
+      "max_agents": 1000
+    }
+  },
+  "demo_agents": {
+    "note": "These are the addresses derived from the local .demo-wallets.json. Each clone of the repo has its own set; these are the addresses funded for THIS deployer's demo on Sepolia.",
+    "A": {
+      "address": "0xc89ce60bd952834FA4F4EAc4D5117883412ECAf9",
+      "role": "seller",
+      "minted_musdc": "0"
+    },
+    "B": {
+      "address": "0x40D2eAe10A6283abc4303260e0D166C2fd9Cbf1D",
+      "role": "buyer",
+      "minted_musdc": "5000000000",
+      "musdc_decimals": 6,
+      "mint_tx": "0x70dee180ce8ac1a4eb21c0b58cdefaa3dc27d327f4ab7b669fbdd61d58179ab6"
+    },
+    "C": {
+      "address": "0x04137b5316A83E4b842A870b0de8C8729ad667d2",
+      "role": "buyer",
+      "minted_musdc": "5000000000",
+      "musdc_decimals": 6,
+      "mint_tx": "0x93ade5ba58c6e5f75ab7918f36de96debc07e8ded5dd80a2d7c321a0d76ca97b"
+    },
+    "D": {
+      "address": "0xB9c45b034325f2Ba3adF8D3c7631C9627F9D6074",
+      "role": "buyer",
+      "minted_musdc": "200000000",
+      "musdc_decimals": 6,
+      "mint_tx": "0x9ae4680e29661c7098223455c0198bc12a4363c1deda2bb28e352088ad000338",
+      "note": "intentionally underfunded for the INSUFFICIENT_FUNDS demo branch (needs ~3600 mUSDC, has 200)"
+    }
+  }
+}

@@ -135,7 +135,10 @@ work — see [docs/EIGEN_DEPLOYMENT.md](docs/EIGEN_DEPLOYMENT.md) §8.
 | Engine (LOCAL_MOCK) | Runs locally via `npm run dev`. |
 | Engine (EIGEN_TEE) | Live on EigenCompute mainnet-alpha. App `0x362a966eB23597190483634d6769Fc41b87514B3`, endpoint `35.204.215.188:8787`, image `sha256:5aed3323…`. |
 | `HecateSettlementVerifier.sol` | Live on Sepolia at `0x0bAcD73a36f774Cb7c2f252a2d3c002A0079D4E2` (verified on Etherscan). |
-| `HecateVault.sol`, `MockUSDC.sol` | Written + tested (28 + 6 Forge tests). **Not** engine-integrated, **not** deployed. |
+| `MockUSDC.sol` | Live on Sepolia at `0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB` (verified). 6-decimal demo ERC-20 with public mint. |
+| `HecateVault.sol` | Live on Sepolia at `0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA` (verified). ENGINE address immutable, set to `0x7E5F4552…`. **Not yet engine-integrated** (V6). |
+
+See [`deployments/sepolia.json`](deployments/sepolia.json) for the full manifest including demo-agent mint transactions and constructor args.
 
 ## Demo agent wallets (V3 / V4)
 
@@ -277,8 +280,8 @@ See [docs/DEMO.md](docs/DEMO.md) for the full tamper table.
   additional batches for richer narrative.
 - **44** Forge tests across three contracts:
   - 9 on `HecateSettlementVerifier.sol` (deployed to Sepolia at `0x0bAcD73a36f774Cb7c2f252a2d3c002A0079D4E2`, end-to-end anvil + Sepolia verified),
-  - 28 on `HecateVault.sol` (production-style prefunded vault — written, not engine-integrated, not deployed),
-  - 6 on `MockUSDC.sol` (6-decimal ERC-20),
+  - 28 on `HecateVault.sol` (production-style prefunded vault — deployed to Sepolia at `0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA`, not yet engine-integrated),
+  - 6 on `MockUSDC.sol` (6-decimal demo ERC-20 — deployed to Sepolia at `0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB`),
   - 1 cross-tool ABI parity pin (`HecateVaultAbiParity.t.sol`) keeping solc's
     `abi.encode` aligned with viem's `encodeAbiParameters` for vault settlement.
 

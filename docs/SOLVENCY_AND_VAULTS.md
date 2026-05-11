@@ -76,7 +76,7 @@ There are two materially different versions of this option, and the docs must no
 
 #### 3.2.a Simple `HecateVault.sol` (public balances)
 
-> **Implementation status (2026-05):** the contract itself has now been written ([`contracts/HecateVault.sol`](../contracts/HecateVault.sol), 28 Forge tests). It is **not** integrated with the runtime engine and **not** deployed on any network. Engine integration is the V2 phase of the on-chain vault project; until then, every demo continues to use the mock prefunded vault from §3.1.
+> **Implementation status (2026-05):** the contract has been written ([`contracts/HecateVault.sol`](../contracts/HecateVault.sol), 28 Forge tests) and **deployed and verified on Sepolia** at [`0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA`](https://sepolia.etherscan.io/address/0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA), alongside a 6-decimal demo MockUSDC at [`0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB`](https://sepolia.etherscan.io/address/0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB). The engine signs the on-chain `settleBatch` preimage on every batch (`engine_signature_onchain`, since V2 stage 1), but does **not** yet call `settleBatch` on chain — that integration is V6. Until then, every demo continues to use the mock prefunded vault from §3.1.
 
 **What it would be:** an ordinary on-chain contract holding deposited ETH and USDC, with deposit/withdraw functions for agents and a `settleBatch` function callable only by an attested signer. Per-agent balances and reservations are stored as plain on-chain state.
 
@@ -197,7 +197,7 @@ There are two materially different versions of this option, and the docs must no
 | Option | Settlement guarantee | Custody risk | Privacy cost | Capital efficiency | v1 fit |
 |---|---|---|---|---|---|
 | Mock prefunded vault | Strong (in-engine) | None | None | N/A | ✅ |
-| Real prefunded vault (simple, 3.2.a) | Strongest | Contract risk | High (public on-chain inventory) | Low | ⚙ contract written (`contracts/HecateVault.sol`), **not** engine-integrated, **not** deployed |
+| Real prefunded vault (simple, 3.2.a) | Strongest | Contract risk | High (public on-chain inventory) | Low | ⚙ contract written + **deployed to Sepolia** (`0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA`), **not** yet engine-integrated |
 | Real prefunded vault (confidential, 3.2.b) | Strongest | Contract + crypto risk | Restored, but only with substantial extra machinery (ZK / MPC / confidential accounting) | Low | ❌ out of scope for v1 and foreseeable v2 |
 | Allowance / Permit2 | Weak (allowance can move) | Low | Low | High | ❌ possible v2 |
 | Per-intent on-chain locking | Strong | Low | **Very high (locks leak side/size)** | Medium | ❌ defeats thesis |
