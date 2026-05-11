@@ -38,7 +38,7 @@ Then deploy:
 ```sh
 cd contracts
 forge install foundry-rs/forge-std    # first time only
-forge test -vv                         # confirm 9/9 pass
+forge test -vv                         # confirm 44/44 pass
 
 # Forge auto-loads .env. The named endpoint `sepolia-alchemy` (defined in
 # foundry.toml) resolves to https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}.
@@ -94,8 +94,8 @@ EXPECTED_MODE=EIGEN_TEE npm run eigen:attest-check -- https://<deployed-url>
 # Run every test surface. All should pass.
 npm install
 npm run typecheck
-npm test                          # expect: 661 / 661
-cd contracts && forge test        # expect: 9 / 9
+npm test                          # expect: 691 / 691
+cd contracts && forge test        # expect: 44 / 44
 cd ..
 bash scripts/demo-replay.sh       # expect: ALL DEMO SCENARIOS PASSED
 ```

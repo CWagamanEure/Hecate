@@ -303,6 +303,18 @@ export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
       }
       await resetDemoState(opts.dataDir);
       info(`reset demo state in ${opts.dataDir}`);
+    } else if (opts.useDemoWallets) {
+      // State-mixing UX trap: vault.json keys are agent addresses. If a
+      // previous run used dev keys in this data dir, those entries are
+      // orphaned when we switch to wallet addresses, and the new agents
+      // start with empty balances. Warn explicitly so the user knows to
+      // re-run with --reset-demo-state if they see INSUFFICIENT_FUNDS.
+      console.log(
+        "\n  ! --use-demo-wallets without --reset-demo-state: any existing\n" +
+        "    vault state in --data-dir is keyed by the previous run's agent\n" +
+        "    addresses. Pass --reset-demo-state --data-dir <path> on a fresh\n" +
+        "    run if you see INSUFFICIENT_FUNDS for canonical agents."
+      );
     }
 
     // Attestation.

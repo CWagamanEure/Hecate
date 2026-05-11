@@ -92,8 +92,15 @@ async function main(): Promise<void> {
     D,
   });
 
-  await writeFile(WALLETS_PATH, JSON.stringify(file, null, 2) + "\n", "utf-8");
-  console.log(`[wallets] wrote ${WALLETS_PATH}`);
+  // mode 0o600 (owner-only rw). The file contains 4 secp256k1 private
+  // keys; once V5 funds them on Sepolia, the keys carry real (testnet)
+  // value. Default writeFile perms (0o644) would let any local user on
+  // a shared host read the file. POSIX-only; ignored on Windows.
+  await writeFile(WALLETS_PATH, JSON.stringify(file, null, 2) + "\n", {
+    encoding: "utf-8",
+    mode: 0o600
+  });
+  console.log(`[wallets] wrote ${WALLETS_PATH} (mode 0o600)`);
   printAddresses(file);
 }
 

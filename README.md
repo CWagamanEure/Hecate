@@ -137,6 +137,42 @@ work — see [docs/EIGEN_DEPLOYMENT.md](docs/EIGEN_DEPLOYMENT.md) §8.
 | `HecateSettlementVerifier.sol` | Live on Sepolia at `0x0bAcD73a36f774Cb7c2f252a2d3c002A0079D4E2` (verified on Etherscan). |
 | `HecateVault.sol`, `MockUSDC.sol` | Written + tested (28 + 6 Forge tests). **Not** engine-integrated, **not** deployed. |
 
+## Demo agent wallets (V3 / V4)
+
+The simulator can run the canonical 4-agent demo with either hardcoded
+dev keys (default, no setup) or with fresh Sepolia agent wallets (opt-in,
+required for the on-chain vault demo).
+
+**Fresh wallets per machine:**
+
+```sh
+npm run wallets:gen
+```
+
+Writes `.demo-wallets.json` at the repo root with 4 secp256k1 keypairs
+(A, B, C, D). The file is gitignored and chmodded `0o600`; each clone of
+the repo generates its own set. Re-running the command is idempotent —
+to regenerate, delete the file first.
+
+The script prints each agent's Sepolia address along with the V5 funding
+plan (~0.005 Sepolia ETH per agent; mUSDC is minted by the V5 deploy,
+no faucet needed for tokens).
+
+**Use the wallets in the demo:**
+
+```sh
+npm run simulate -- --use-demo-wallets --reset-demo-state --data-dir ./data
+```
+
+`--use-demo-wallets` replaces the canonical 4-agent fixtures' hardcoded
+dev keys with the generated wallets. Failure / adversary fixtures keep
+their dev keys. Pass `--reset-demo-state` alongside if the data dir has
+prior state under different agent addresses; otherwise the runner prints
+a warning.
+
+Without `--use-demo-wallets` the demo continues to run on the dev keys
+unchanged, so existing CI / soak / local flows are unaffected.
+
 ## Runtime modes
 
 - **`LOCAL_MOCK`** (default). Fully working v1. AES-GCM mock encryption with a
@@ -228,7 +264,7 @@ See [docs/DEMO.md](docs/DEMO.md) for the full tamper table.
 
 ## Project status
 
-- **663** vitest cases passing across **50** files.
+- **691** vitest cases passing across **54** files.
 - **30**-cycle deterministic soak test (`npm run test:soak`).
 - **9** adversarial test files (~79 cases) covering matching, settlement,
   vault, receipts, access control, persistence corruption, decimal boundaries,

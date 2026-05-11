@@ -25,6 +25,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { Hex32, HexAddress } from "@shared/schemas/hex";
+import { privateKeyToAddress } from "@shared/crypto";
 
 const Wallet = z
   .object({
@@ -93,6 +94,22 @@ export async function loadDemoWallets(
       `loadDemoWallets: ${path} failed schema validation: ${result.error.message}. ` +
         `Delete it and run \`npm run wallets:gen\` to regenerate.`
     );
+  }
+  // pk -> addr pairing integrity. The schema validates SHAPE only; this
+  // extra step catches tampered files where pk and addr don't actually
+  // belong to the same keypair (which would silently misroute funding to
+  // an address the engine can't sign for). Comparison is case-insensitive
+  // because the file may store either lowercase or EIP-55 form.
+  for (const slot of ["A", "B", "C", "D"] as const) {
+    const declared = result.data[slot].addr.toLowerCase();
+    const derived = privateKeyToAddress(result.data[slot].pk).toLowerCase();
+    if (declared !== derived) {
+      throw new Error(
+        `loadDemoWallets: ${path} agent ${slot} pk/addr mismatch ` +
+          `(addr=${result.data[slot].addr}, but pk derives to ${privateKeyToAddress(result.data[slot].pk)}). ` +
+          `Delete the file and run \`npm run wallets:gen\` to regenerate.`
+      );
+    }
   }
   return result.data;
 }

@@ -99,4 +99,14 @@ describe("demoWallets — loader", () => {
     const bad = { ...VALID_WALLETS, version: 2 };
     expect(DemoWalletFile.safeParse(bad).success).toBe(false);
   });
+
+  it("rejects a file where pk and addr don't belong to the same keypair", async () => {
+    // Swap C's addr to D's addr — schema still passes (both are valid
+    // EIP-55 addresses), but the pairing is broken.
+    const tampered = JSON.parse(JSON.stringify(VALID_WALLETS));
+    tampered.C.addr = VALID_WALLETS.D.addr;
+    await withTempFile(JSON.stringify(tampered), async (path) => {
+      await expect(loadDemoWallets(path)).rejects.toThrow(/agent C pk\/addr mismatch/);
+    });
+  });
 });
