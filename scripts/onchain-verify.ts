@@ -136,10 +136,20 @@ async function main(): Promise<void> {
 
   const rpcUrl = resolveRpcUrl();
   const verifierAddr = requireEnv("VERIFIER_ADDRESS") as Address;
-  const deployerPk = process.env.DEPLOYER_PRIVATE_KEY as Hex | undefined;
+  // Normalize the private key: accept both 0x-prefixed and bare 64-hex forms
+  // (Foundry's `cast` and `forge --private-key` accept either; viem requires 0x).
+  let deployerPk = process.env.DEPLOYER_PRIVATE_KEY;
+  if (deployerPk && !deployerPk.startsWith("0x") && /^[0-9a-fA-F]{64}$/.test(deployerPk)) {
+    deployerPk = "0x" + deployerPk;
+  }
   if (!dryRun && !deployerPk) {
     throw new Error(
       "DEPLOYER_PRIVATE_KEY required unless --dry-run is set (no tx will be broadcast)."
+    );
+  }
+  if (deployerPk && !/^0x[0-9a-fA-F]{64}$/.test(deployerPk)) {
+    throw new Error(
+      "DEPLOYER_PRIVATE_KEY must be 64 hex characters (optionally 0x-prefixed)."
     );
   }
 
@@ -192,7 +202,7 @@ async function main(): Promise<void> {
   }
 
   // Broadcast verifyAndEmit.
-  const account = privateKeyToAccount(deployerPk!);
+  const account = privateKeyToAccount(deployerPk as Hex);
   const wallet = createWalletClient({ chain, transport: http(rpcUrl), account });
   console.log(`\nBroadcasting verifyAndEmit from ${account.address} ...`);
 
