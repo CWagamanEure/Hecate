@@ -19,6 +19,7 @@ import {
 } from "@shared/matching";
 import { applySettlement } from "@shared/settlement";
 import { buildBatchReceipt, buildFillReceipts } from "@shared/receipts";
+import { signVaultSettlement } from "@shared/vault/settlementSigner";
 import {
   appendJsonl,
   readJsonl,
@@ -71,7 +72,7 @@ export async function batchesRoutes(
         reservationBookBeforeSettlement: bookBefore
       });
 
-      const batch_receipt = buildBatchReceipt({
+      const canonicalReceipt = buildBatchReceipt({
         batch: built.batch_input,
         fillPlan,
         settlement: apply.settlement,
@@ -82,6 +83,24 @@ export async function batchesRoutes(
         runtime: state.runtime,
         engineKey: state.engineKey
       });
+
+      // V2 stage 1: also sign the on-chain vault-settlement preimage.
+      // We attach it as the optional engine_signature_onchain field. The
+      // mock-vault path is unchanged; the on-chain signature is additive
+      // and consumers that don't care about it can ignore it. If the batch
+      // produced no vault_deltas (no-op match), we omit the field rather
+      // than signing an empty array — HecateVault.settleBatch would revert
+      // "empty batch" anyway.
+      const batch_receipt = apply.settlement.vault_deltas.length > 0
+        ? {
+            ...canonicalReceipt,
+            engine_signature_onchain: signVaultSettlement(
+              built.batch_input.batch_id,
+              apply.settlement.vault_deltas,
+              state.engineKey
+            ).signature
+          }
+        : canonicalReceipt;
 
       const fill_receipts = buildFillReceipts({
         batch: built.batch_input,

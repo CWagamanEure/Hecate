@@ -27,7 +27,16 @@ const BatchReceiptBody = z
 export type BatchReceiptBody = z.infer<typeof BatchReceiptBody>;
 
 export const BatchReceipt = BatchReceiptBody.extend({
-  engine_signature: Hex65
+  engine_signature: Hex65,
+  /**
+   * V2 stage 1: engine signature over the on-chain vault-settlement preimage
+   * keccak256(abi.encode(batchIdBytes32, agents[], ethDeltas[], usdcDeltas[])).
+   * Optional so existing v1 bundles (which predate vault integration) still
+   * parse cleanly. When present, anyone can call HecateVault.settleBatch(...)
+   * with the corresponding deltas to apply the settlement on-chain.
+   * See shared/vault/settlementSigner.ts and contracts/HecateVault.sol.
+   */
+  engine_signature_onchain: Hex65.optional()
 }).strict();
 export type BatchReceipt = z.infer<typeof BatchReceipt>;
 

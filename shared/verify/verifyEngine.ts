@@ -38,7 +38,12 @@ import {
   buildFillReceiptBodies
 } from "@shared/receipts";
 import { buildSettlementObject } from "@shared/settlement";
-import { hashSettlement, normalizeAddress } from "@shared/crypto";
+import {
+  hashSettlement,
+  normalizeAddress,
+  recoverHashSigner
+} from "@shared/crypto";
+import { buildVaultPreimage } from "@shared/vault/settlementSigner";
 import { cmpDecimal } from "@shared/math/decimal";
 
 // ---- input types -----------------------------------------------------------
@@ -306,6 +311,38 @@ export function verifyBatchReceipt(input: VerifyBatchReceiptInput): VerifyResult
 
   if (expectedBody !== null) {
     failures.push(...compareBatchReceiptBody(expectedBody, input.receipt));
+  }
+
+  // 4. V2 on-chain vault signature (optional). If present, must recover to
+  //    the same engine address. The preimage is independent of the canonical
+  //    receipt body — it's keccak256(abi.encode(...)) over the settlement's
+  //    vault_deltas. Mutating either the field itself or any input that
+  //    changes the preimage (settlement.vault_deltas, batch_id) breaks
+  //    recovery here.
+  if (input.receipt.engine_signature_onchain) {
+    try {
+      const { hash } = buildVaultPreimage(
+        input.receipt.batch_id,
+        input.settlement.vault_deltas
+      );
+      const recoveredOnchain = recoverHashSigner(
+        hash,
+        input.receipt.engine_signature_onchain
+      );
+      if (recoveredOnchain !== expectedAddr) {
+        failures.push({
+          code: "ONCHAIN_SIGNER_MISMATCH",
+          path: "/engine_signature_onchain",
+          detail: `recovered ${recoveredOnchain} != expected ${expectedAddr}`
+        });
+      }
+    } catch (e) {
+      failures.push({
+        code: "ONCHAIN_SIGNATURE_INVALID",
+        path: "/engine_signature_onchain",
+        detail: (e as Error).message
+      });
+    }
   }
 
   if (failures.length === 0) return { ok: true };

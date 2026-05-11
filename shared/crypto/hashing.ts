@@ -93,7 +93,12 @@ export function hashBatchReceiptBody(
   r: BatchReceipt | BatchReceiptBody
 ): Hex32 {
   if ("engine_signature" in r) {
-    const { engine_signature: _sig, ...rest } = r;
+    // Strip BOTH the canonical receipt signature and the V2 on-chain vault
+    // signature. The on-chain signature is over a different preimage
+    // (abi-encoded vault settlement, not canonical-JSON receipt), so its
+    // presence/absence must not affect the canonical receipt hash.
+    const { engine_signature: _sig, engine_signature_onchain: _onchain, ...rest } = r as
+      BatchReceipt & { engine_signature_onchain?: string };
     return hashCanonical(rest);
   }
   return hashCanonical(r);
