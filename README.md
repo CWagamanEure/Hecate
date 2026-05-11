@@ -228,7 +228,7 @@ See [docs/DEMO.md](docs/DEMO.md) for the full tamper table.
 
 ## Project status
 
-- **661** vitest cases passing across **49** files.
+- **663** vitest cases passing across **50** files.
 - **30**-cycle deterministic soak test (`npm run test:soak`).
 - **9** adversarial test files (~79 cases) covering matching, settlement,
   vault, receipts, access control, persistence corruption, decimal boundaries,

@@ -252,11 +252,13 @@ as a dev signer.
 
 **What's tested?**
 
-661 vitest cases across 49 files, including 9 adversarial test files
+663 vitest cases across 50 files, including 9 adversarial test files
 (one of which is a property-based fuzz that mutates random leaves of a
 saved bundle — every mutation tested rejects). 14 explicit tamper
-scenarios in the CLI replay. 9 Forge tests for the on-chain verifier.
-30-cycle deterministic soak. End-to-end demo verified live.
+scenarios in the CLI replay. 44 Forge tests across three contracts
+(`HecateSettlementVerifier.sol`, `HecateVault.sol`, `MockUSDC.sol`)
+plus a cross-tool ABI parity pin. 30-cycle deterministic soak.
+End-to-end demo verified live.
 
 **Is the Sepolia contract deployed?**
 
