@@ -159,13 +159,32 @@ async function main(): Promise<void> {
   const hash = hashBatchReceiptBody(bundle.batchReceipt) as Hex;
   const expectedEngine = bundle.expectedEngineAddress as Address;
 
+  // Redact the API key in the printed RPC URL. Providers (Alchemy, Infura,
+  // QuickNode, etc.) put the key in the LAST path segment, e.g.
+  // https://eth-sepolia.g.alchemy.com/v2/<key>. We replace only that
+  // segment with "…", keeping the host + protocol + path prefix intact.
+  function redactRpcUrl(url: string): string {
+    try {
+      const u = new URL(url);
+      const parts = u.pathname.split("/").filter((p) => p.length > 0);
+      if (parts.length > 0) {
+        parts[parts.length - 1] = "REDACTED";
+        u.pathname = "/" + parts.join("/");
+      }
+      return u.toString();
+    } catch {
+      return url;
+    }
+  }
+  const redactedRpc = redactRpcUrl(rpcUrl);
+
   console.log("Bundle:");
   console.log(`  batch_id:        ${bundle.batchReceipt.batch_id}`);
   console.log(`  body hash:       ${hash}`);
   console.log(`  signature:       ${sig.slice(0, 18)}...${sig.slice(-16)}`);
   console.log(`  expected engine: ${expectedEngine}`);
   console.log(`  contract:        ${verifierAddr}`);
-  console.log(`  rpc:             ${rpcUrl}`);
+  console.log(`  rpc:             ${redactedRpc}`);
 
   // Build a public client to inspect chain id and (in dry-run) eth_call.
   const probeClient = createPublicClient({ transport: http(rpcUrl) });
