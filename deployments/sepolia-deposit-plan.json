@@ -1,0 +1,26 @@
+{
+  "chain_id": 11155111,
+  "note": "Per-agent deposit amounts for the Sepolia HecateVault demo. Scaled DOWN from the local fixtures (10 ETH / 20000 USDC) to fit faucet-sized agent wallets. The matcher operates on ratios so the demo's matching logic is unchanged at these scaled amounts: A sells 0.0001 ETH at limit 3580 mUSDC/ETH; B buys 0.00004 ETH; C buys some; D tries to buy but is underfunded.",
+  "agents": {
+    "A": {
+      "deposits": [
+        { "asset": "ETH", "amount_human": "0.0001", "amount_wei": "100000000000000" }
+      ]
+    },
+    "B": {
+      "deposits": [
+        { "asset": "USDC", "amount_human": "5000", "amount_micro": "5000000000" }
+      ]
+    },
+    "C": {
+      "deposits": [
+        { "asset": "USDC", "amount_human": "5000", "amount_micro": "5000000000" }
+      ]
+    },
+    "D": {
+      "deposits": [
+        { "asset": "USDC", "amount_human": "200", "amount_micro": "200000000" }
+      ]
+    }
+  }
+}
