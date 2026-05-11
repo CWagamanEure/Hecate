@@ -25,7 +25,8 @@
     "eigen:attest-check": "bash scripts/eigen-attest-check.sh",
     "onchain:verify": "tsx scripts/onchain-verify.ts",
     "wallets:gen": "tsx scripts/gen-demo-wallets.ts",
-    "vault:deposit": "tsx scripts/agents-deposit.ts"
+    "vault:deposit": "tsx scripts/agents-deposit.ts",
+    "vault:settle": "tsx scripts/onchain-settle.ts"
   },
   "dependencies": {
     "@noble/hashes": "^1.5.0",

@@ -133,12 +133,40 @@ work — see [docs/EIGEN_DEPLOYMENT.md](docs/EIGEN_DEPLOYMENT.md) §8.
 | Artifact | Status |
 |---|---|
 | Engine (LOCAL_MOCK) | Runs locally via `npm run dev`. |
-| Engine (EIGEN_TEE) | Live on EigenCompute mainnet-alpha. App `0x362a966eB23597190483634d6769Fc41b87514B3`, endpoint `35.204.215.188:8787`, image `sha256:5aed3323…`. |
+| Engine (EIGEN_TEE) | Live on EigenCompute mainnet-alpha. App `0x362a966eB23597190483634d6769Fc41b87514B3`, endpoint `35.204.215.188:8787`, image `sha256:5aed3323…` (pre-V2 code; on-chain integration goes live with V6d redeploy). |
 | `HecateSettlementVerifier.sol` | Live on Sepolia at `0x0bAcD73a36f774Cb7c2f252a2d3c002A0079D4E2` (verified on Etherscan). |
 | `MockUSDC.sol` | Live on Sepolia at `0x1662B5050B70c8fAc9405d11B3e7eCDe9eF6c3cB` (verified). 6-decimal demo ERC-20 with public mint. |
-| `HecateVault.sol` | Live on Sepolia at `0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA` (verified). ENGINE address immutable, set to `0x7E5F4552…`. **Not yet engine-integrated** (V6). |
+| `HecateVault.sol` | Live on Sepolia at `0x7EF8583489eEb158bf9233bC7a38e0EC410eF1aA` (verified). Engine reads its balances when `VAULT_BACKEND=onchain` (V6b); `settleBatch` submission via `npm run vault:settle` (V6c). |
 
-See [`deployments/sepolia.json`](deployments/sepolia.json) for the full manifest including demo-agent mint transactions and constructor args.
+See [`deployments/sepolia.json`](deployments/sepolia.json) for the full manifest.
+
+## On-chain demo (Sepolia, V6)
+
+End-to-end on-chain flow for the demo:
+
+```sh
+# (one-time) generate demo agent wallets
+npm run wallets:gen
+
+# (user action) fund each printed agent address with ~0.001 Sepolia ETH from a faucet
+
+# move agent funds into the on-chain vault
+npm run vault:deposit -- --dry-run        # confirm tx will succeed
+npm run vault:deposit                     # broadcast
+
+# run the engine in on-chain mode (reads vault balances from Sepolia)
+VAULT_BACKEND=onchain npm run dev
+
+# run the simulator using the real agent wallets
+npm run simulate -- --use-demo-wallets --reset-demo-state --data-dir ./data \
+  --save-bundle ./data/last-bundle.json
+
+# settle the bundle on chain
+npm run vault:settle -- ./data/last-bundle.json --dry-run  # confirm signature + deltas
+npm run vault:settle -- ./data/last-bundle.json            # broadcast
+```
+
+Each step is independent and can be re-run. See the script source for `--help` on each.
 
 ## Demo agent wallets (V3 / V4)
 
