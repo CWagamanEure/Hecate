@@ -95,35 +95,47 @@ DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf
 
 ### Sepolia (production demo)
 
-Prerequisites:
-- A Sepolia RPC URL (free from Alchemy, Infura, or a public provider).
-- A deployer wallet with ~0.005 Sepolia ETH (any Sepolia faucet covers this).
-- An Etherscan API key (free, optional but recommended — enables source-code
-  verification on Etherscan so the deployed contract is human-readable).
+Prerequisites — fill these into `.env` in the project root (see
+[`.env.example`](../.env.example) for the full block):
+
+- `ALCHEMY_API_KEY` — bare API key from https://dashboard.alchemy.com/
+  (scripts auto-build the Sepolia URL). Alternatively `SEPOLIA_RPC_URL`
+  for any other provider.
+- `DEPLOYER_PRIVATE_KEY` — fresh wallet, ~0.005 Sepolia ETH funded
+  ([Alchemy faucet](https://www.alchemy.com/faucets/ethereum-sepolia)).
+- `ETHERSCAN_API_KEY` — free from https://etherscan.io/myapikey
+  (optional but recommended; enables `forge --verify` source upload).
+
+Once `.env` is set:
 
 ```sh
-export SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/<your-key>
-export DEPLOYER_PRIVATE_KEY=0x...
-export ETHERSCAN_API_KEY=...
-
 cd contracts
+# Forge auto-loads .env from the project root for ${VAR} substitution in
+# foundry.toml's [rpc_endpoints]. The named endpoint `sepolia-alchemy` is
+# defined as https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}.
 forge script script/Deploy.s.sol \
-  --rpc-url $SEPOLIA_RPC_URL \
+  --rpc-url sepolia-alchemy \
   --broadcast \
   --verify \
   --etherscan-api-key $ETHERSCAN_API_KEY \
   --private-key $DEPLOYER_PRIVATE_KEY
+
+# If you set SEPOLIA_RPC_URL instead of ALCHEMY_API_KEY, use --rpc-url sepolia.
 ```
 
-Record the deployed address. Then run on-chain verification of a real
+Record the deployed address (printed at end of script) and paste it into
+`.env`'s `VERIFIER_ADDRESS=` line. Then run on-chain verification of a real
 Hecate bundle:
 
 ```sh
-export VERIFIER_ADDRESS=0x...   # from the forge script output
 cd ..
+npm run dev &  # terminal 1, engine
 npm run simulate -- --reset-demo-state --data-dir ./data --save-bundle ./data/last-bundle.json
 npm run onchain:verify -- ./data/last-bundle.json
 ```
+
+`npm run onchain:verify` reads `.env` automatically via the project's
+`loadDotenv` helper.
 
 The script prints the Sepolia tx hash plus a `https://sepolia.etherscan.io/tx/...`
 link. Following the link shows the `ReceiptVerified(bytes32 indexed hash,

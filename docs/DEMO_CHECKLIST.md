@@ -11,33 +11,50 @@ done in advance so demo day has nothing risky in it.
 
 ### Sepolia setup
 
+The on-chain step needs four things in `.env` at the project root. Both
+the Forge deploy and the TS broadcast auto-load `.env`.
+
 ```sh
-# 1. Get a Sepolia RPC URL. Free from Alchemy or Infura; or use a public node.
-#    https://www.alchemy.com/  or  https://www.infura.io/
-export SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/<your-key>
+# 1. Start from the template.
+cp .env.example .env
+```
 
-# 2. Fund a deployer wallet. Faucets dispense ~0.1 Sepolia ETH; you need ~0.005.
-#    https://www.alchemy.com/faucets/ethereum-sepolia
-export DEPLOYER_PRIVATE_KEY=0x...
+Open `.env` and fill in:
 
-# 3. Optional but recommended: Etherscan API key for source verification.
-#    https://etherscan.io/myapikey
-export ETHERSCAN_API_KEY=...
+- `ALCHEMY_API_KEY` — free from https://dashboard.alchemy.com/ (the
+  scripts derive the Sepolia URL for you). Alternatively `SEPOLIA_RPC_URL`
+  for any other provider.
+- `DEPLOYER_PRIVATE_KEY` — fresh wallet (don't use one with mainnet
+  assets). Fund it with ~0.005 Sepolia ETH from a faucet, e.g.
+  https://www.alchemy.com/faucets/ethereum-sepolia .
+- `ETHERSCAN_API_KEY` — free from https://etherscan.io/myapikey.
+  Recommended; enables source verification on Etherscan so the deployed
+  contract is readable.
+- `VERIFIER_ADDRESS` — leave empty for now; you'll paste it in after
+  the deploy.
 
-# 4. Deploy the verifier contract.
+Then deploy:
+
+```sh
 cd contracts
 forge install foundry-rs/forge-std    # first time only
 forge test -vv                         # confirm 9/9 pass
 
+# Forge auto-loads .env. The named endpoint `sepolia-alchemy` (defined in
+# foundry.toml) resolves to https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}.
+# If you set SEPOLIA_RPC_URL instead, use --rpc-url sepolia.
 forge script script/Deploy.s.sol \
-  --rpc-url $SEPOLIA_RPC_URL \
+  --rpc-url sepolia-alchemy \
   --broadcast \
   --verify \
   --etherscan-api-key $ETHERSCAN_API_KEY \
   --private-key $DEPLOYER_PRIVATE_KEY
+```
 
-# 5. Record the deployed address. The script prints it at the end.
-export VERIFIER_ADDRESS=0x...
+Script prints `HecateSettlementVerifier deployed at: 0x...` at the end.
+Paste that address into `.env`'s `VERIFIER_ADDRESS=` line.
+
+```sh
 cd ..
 ```
 

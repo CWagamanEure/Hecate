@@ -12,6 +12,16 @@ gas_reports = ["HecateSettlementVerifier"]
 # Receipt body hashes are computed off-chain (canonical JSON in TS); the
 # contract is a pure ecrecover adapter.
 
+# Named RPC endpoints. `forge script ... --rpc-url sepolia` resolves these
+# at runtime, with ${VAR} substitution from the environment / .env.
+# Two equivalent inputs are supported: ALCHEMY_API_KEY (bare key) auto-
+# derives the Sepolia URL; SEPOLIA_RPC_URL takes full control if you want
+# to use a different provider. Forge auto-loads .env from the project root
+# (which for `cd contracts && forge script ...` is one level up).
+[rpc_endpoints]
+sepolia = "${SEPOLIA_RPC_URL}"
+sepolia-alchemy = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+
 [fmt]
 line_length = 100
 tab_width = 4

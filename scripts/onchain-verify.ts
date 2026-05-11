@@ -93,6 +93,22 @@ function requireEnv(name: string): string {
   return v;
 }
 
+/**
+ * Resolve the Sepolia RPC URL. Two accepted forms:
+ *   1. SEPOLIA_RPC_URL  — explicit full URL (any provider).
+ *   2. ALCHEMY_API_KEY  — bare Alchemy key; we construct the Sepolia URL.
+ * SEPOLIA_RPC_URL wins if both are set.
+ */
+function resolveRpcUrl(): string {
+  const explicit = process.env.SEPOLIA_RPC_URL;
+  if (explicit) return explicit;
+  const alchemyKey = process.env.ALCHEMY_API_KEY;
+  if (alchemyKey) return `https://eth-sepolia.g.alchemy.com/v2/${alchemyKey}`;
+  throw new Error(
+    "Need SEPOLIA_RPC_URL or ALCHEMY_API_KEY in env (or .env); see .env.example."
+  );
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const dryRun = argv.includes("--dry-run");
@@ -118,7 +134,7 @@ async function main(): Promise<void> {
     throw new Error(`bundle ${bundlePath} missing expectedEngineAddress`);
   }
 
-  const rpcUrl = requireEnv("SEPOLIA_RPC_URL");
+  const rpcUrl = resolveRpcUrl();
   const verifierAddr = requireEnv("VERIFIER_ADDRESS") as Address;
   const deployerPk = process.env.DEPLOYER_PRIVATE_KEY as Hex | undefined;
   if (!dryRun && !deployerPk) {
