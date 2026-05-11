@@ -1,0 +1,18 @@
+# Caddyfile for EigenCompute deployment.
+#
+# Eigen's image wrapper adds Caddy + EXPOSEs ports 80/443. Without this file
+# Caddy has no config and external traffic doesn't reach the Hecate server
+# (which listens on localhost:8787 inside the container).
+#
+# Plain HTTP on :80, reverse-proxied to the Hecate API. For demo simplicity
+# we don't terminate TLS here; Eigen front-ends or a CDN would handle that
+# in a production deployment.
+
+:80 {
+	# Forward all paths and methods to the Hecate API on localhost:8787.
+	reverse_proxy localhost:8787
+
+	# Disable Caddy's automatic HTTPS upgrade for this site so unencrypted
+	# HTTP on :80 stays open (otherwise Caddy would 308-redirect to HTTPS
+	# and we'd need TLS termination configured here).
+}
