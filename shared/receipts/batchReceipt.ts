@@ -38,6 +38,7 @@ import {
   signHash,
   recoverHashSigner
 } from "@shared/crypto";
+import { signVaultSettlement } from "@shared/vault/settlementSigner";
 import { cmpDecimal } from "@shared/math/decimal";
 
 export type BuildBatchReceiptInput = {
@@ -186,8 +187,23 @@ export function recoverBatchReceiptSigner(receipt: BatchReceipt): HexAddress {
   return recoverHashSigner(hash, receipt.engine_signature);
 }
 
-/** Convenience: build body + sign in one call. */
+/** Convenience: build body + sign in one call.
+ *
+ * If the settlement has any vault_deltas, also attaches the V2 on-chain
+ * settlement signature (engine_signature_onchain). This lives here, not
+ * at the route boundary, so every consumer of buildBatchReceipt produces
+ * the same receipt shape. Without it, the verifier's
+ * ONCHAIN_SIGNATURE_REQUIRED check would reject test fixtures built via
+ * buildBatchReceipt for batches with non-empty vault_deltas.
+ */
 export function buildBatchReceipt(input: BuildBatchReceiptInput): BatchReceipt {
   const body = buildBatchReceiptBody(input);
-  return signBatchReceipt(body, input.engineKey);
+  const canonical = signBatchReceipt(body, input.engineKey);
+  if (input.settlement.vault_deltas.length === 0) return canonical;
+  const { signature: engine_signature_onchain } = signVaultSettlement(
+    input.batch.batch_id,
+    input.settlement.vault_deltas,
+    input.engineKey
+  );
+  return { ...canonical, engine_signature_onchain };
 }

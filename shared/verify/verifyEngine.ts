@@ -313,13 +313,28 @@ export function verifyBatchReceipt(input: VerifyBatchReceiptInput): VerifyResult
     failures.push(...compareBatchReceiptBody(expectedBody, input.receipt));
   }
 
-  // 4. V2 on-chain vault signature (optional). If present, must recover to
-  //    the same engine address. The preimage is independent of the canonical
+  // 4. V2 on-chain vault signature. The on-chain signature is REQUIRED
+  //    when settlement.vault_deltas is non-empty: stripping it from a
+  //    bundle that legitimately has vault deltas would discard the
+  //    cryptographic evidence that the engine intended to settle on chain,
+  //    which a downstream relayer would (correctly) treat as a defect.
+  //    When present, it must recover to the same engine address as the
+  //    canonical receipt. The preimage is independent of the canonical
   //    receipt body — it's keccak256(abi.encode(...)) over the settlement's
   //    vault_deltas. Mutating either the field itself or any input that
   //    changes the preimage (settlement.vault_deltas, batch_id) breaks
   //    recovery here.
-  if (input.receipt.engine_signature_onchain) {
+  if (!input.receipt.engine_signature_onchain) {
+    if (input.settlement.vault_deltas.length > 0) {
+      failures.push({
+        code: "ONCHAIN_SIGNATURE_REQUIRED",
+        path: "/engine_signature_onchain",
+        detail:
+          "settlement has vault_deltas but receipt is missing engine_signature_onchain"
+      });
+    }
+    // If vault_deltas is empty, the on-chain signature is correctly absent.
+  } else {
     try {
       const { hash } = buildVaultPreimage(
         input.receipt.batch_id,

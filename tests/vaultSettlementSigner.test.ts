@@ -108,6 +108,24 @@ describe("settlementSigner: buildVaultPreimage", () => {
     ];
     expect(() => buildVaultPreimage("bad-asset", deltas)).toThrow(/unknown asset/);
   });
+
+  it("deduplicates agents case-insensitively (defensive)", () => {
+    // Upstream buildSettlementObject already normalizes via normalizeAddress,
+    // so this codepath should never trigger via the engine. But the function
+    // is exported; a future direct caller passing mixed-case duplicates
+    // must not produce two distinct rows for the same on-chain address.
+    const lower = "0xaaaa000000000000000000000000000000000000";
+    const upper = "0xAAAA000000000000000000000000000000000000";
+    const deltas: VaultDelta[] = [
+      // Same agent in two casings; should aggregate, not split.
+      { agent_id: lower, asset: "ETH", delta: "-0.5" },
+      { agent_id: upper, asset: "ETH", delta: "-0.5" },
+      { agent_id: "0xBBBB000000000000000000000000000000000000", asset: "ETH", delta: "1" },
+    ];
+    const p = buildVaultPreimage("case-dedup", deltas);
+    expect(p.agents).toHaveLength(2);
+    expect(p.ethDeltas).toEqual([-1_000_000_000_000_000_000n, 1_000_000_000_000_000_000n]);
+  });
 });
 
 describe("settlementSigner: signVaultSettlement", () => {

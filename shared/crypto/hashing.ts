@@ -92,16 +92,19 @@ export function hashReservationBook(book: ReservationBook): Hex32 {
 export function hashBatchReceiptBody(
   r: BatchReceipt | BatchReceiptBody
 ): Hex32 {
-  if ("engine_signature" in r) {
-    // Strip BOTH the canonical receipt signature and the V2 on-chain vault
-    // signature. The on-chain signature is over a different preimage
-    // (abi-encoded vault settlement, not canonical-JSON receipt), so its
-    // presence/absence must not affect the canonical receipt hash.
-    const { engine_signature: _sig, engine_signature_onchain: _onchain, ...rest } = r as
-      BatchReceipt & { engine_signature_onchain?: string };
-    return hashCanonical(rest);
-  }
-  return hashCanonical(r);
+  // Strip BOTH the canonical receipt signature and the V2 on-chain vault
+  // signature unconditionally. Either field may be present or absent
+  // depending on the call site: bodies passed by signBatchReceipt have
+  // neither (or only engine_signature_onchain attached at construction);
+  // signed receipts passed for verification have both. The canonical
+  // receipt hash must be independent of either signature for round-trips
+  // (sign-then-recover) to match.
+  const {
+    engine_signature: _sig,
+    engine_signature_onchain: _onchain,
+    ...rest
+  } = r as BatchReceipt & { engine_signature_onchain?: string };
+  return hashCanonical(rest);
 }
 
 export function hashFillReceiptBody(r: FillReceipt | FillReceiptBody): Hex32 {

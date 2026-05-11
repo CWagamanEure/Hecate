@@ -84,17 +84,27 @@ export function buildVaultPreimage(
   batchId: string,
   vaultDeltas: readonly VaultDelta[]
 ): VaultPreimage {
-  // Aggregate ETH and USDC per agent. Maps preserve insertion order; we
-  // sort agents below so output is deterministic regardless of input order.
-  const ethByAgent = new Map<HexAddress, bigint>();
-  const usdcByAgent = new Map<HexAddress, bigint>();
-  const agentSet = new Set<HexAddress>();
+  // Aggregate ETH and USDC per agent. We KEY by the lowercased address so
+  // that a hypothetical caller passing the same agent in two casings (e.g.
+  // a non-EIP-55 form and an EIP-55 form) aggregates them as one. The
+  // upstream engine path already routes through normalizeAddress before
+  // building vault_deltas, but this module is exported and a future caller
+  // might invoke it directly; case-insensitive keying makes that safe.
+  // We DISPLAY the canonical EIP-55 form of whatever case first appeared
+  // (any case is acceptable to ABI encoding since we lowercase again at
+  // the encode step).
+  const ethByAgent = new Map<string, bigint>();
+  const usdcByAgent = new Map<string, bigint>();
+  const displayByLower = new Map<string, HexAddress>();
 
   for (const d of vaultDeltas) {
     const scaled18 = toScaled(d.delta);
-    agentSet.add(d.agent_id);
+    const key = d.agent_id.toLowerCase();
+    if (!displayByLower.has(key)) {
+      displayByLower.set(key, d.agent_id);
+    }
     if (d.asset === "ETH") {
-      ethByAgent.set(d.agent_id, (ethByAgent.get(d.agent_id) ?? 0n) + scaled18);
+      ethByAgent.set(key, (ethByAgent.get(key) ?? 0n) + scaled18);
     } else if (d.asset === "USDC") {
       if (scaled18 % USDC_18_TO_6 !== 0n) {
         throw new Error(
@@ -103,27 +113,22 @@ export function buildVaultPreimage(
         );
       }
       const scaled6 = scaled18 / USDC_18_TO_6;
-      usdcByAgent.set(d.agent_id, (usdcByAgent.get(d.agent_id) ?? 0n) + scaled6);
+      usdcByAgent.set(key, (usdcByAgent.get(key) ?? 0n) + scaled6);
     } else {
       throw new Error(`buildVaultPreimage: unknown asset ${d.asset}`);
     }
   }
 
-  // Deterministic agent ordering: lexicographic by lowercased address.
-  // We KEEP the original (EIP-55) casing in the output to match what the
-  // engine state stores. The on-chain hash is over the bytes20 form (case
-  // irrelevant), so we lowercase only at the encode step. viem rejects
-  // mixed-case addresses without a valid EIP-55 checksum, so an all-
-  // lowercase form is the safest universal input.
-  const agents: HexAddress[] = Array.from(agentSet).sort((a, b) =>
-    a.toLowerCase() < b.toLowerCase()
-      ? -1
-      : a.toLowerCase() > b.toLowerCase()
-      ? 1
-      : 0
+  // Deterministic agent ordering: lexicographic on the lowercased key.
+  // We KEEP the original (EIP-55) casing in the output for symmetry with
+  // engine state; the on-chain hash is over bytes20 (case irrelevant) and
+  // we lowercase again at the viem encode step.
+  const lowercaseKeys: string[] = Array.from(displayByLower.keys()).sort();
+  const agents: HexAddress[] = lowercaseKeys.map(
+    (k) => displayByLower.get(k)!
   );
-  const ethDeltas: bigint[] = agents.map((a) => ethByAgent.get(a) ?? 0n);
-  const usdcDeltas: bigint[] = agents.map((a) => usdcByAgent.get(a) ?? 0n);
+  const ethDeltas: bigint[] = lowercaseKeys.map((k) => ethByAgent.get(k) ?? 0n);
+  const usdcDeltas: bigint[] = lowercaseKeys.map((k) => usdcByAgent.get(k) ?? 0n);
 
   const batchIdBytes32 = batchIdToBytes32(batchId);
 
@@ -145,11 +150,13 @@ export function buildVaultPreimage(
  * Sign a vault settlement preimage with the engine secp256k1 key. Returns
  * the 65-byte r||s||v signature with v ∈ {27, 28} (Ethereum convention).
  * The signature recovers to the ENGINE address on chain via ecrecover.
+ * Accepts the engine key as either a 0x-prefixed hex string or raw bytes,
+ * matching shared/crypto/signing#signHash.
  */
 export function signVaultSettlement(
   batchId: string,
   vaultDeltas: readonly VaultDelta[],
-  engineKey: Uint8Array
+  engineKey: Hex32 | Uint8Array
 ): { signature: Hex65; preimage: VaultPreimage } {
   const preimage = buildVaultPreimage(batchId, vaultDeltas);
   const signature = signHash(preimage.hash, engineKey);

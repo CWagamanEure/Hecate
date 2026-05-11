@@ -140,7 +140,12 @@ export function signHash(
 ): Hex65 {
   const hashBytes = hexToBytes(hashHex.slice(2));
   const pkBytes = toBytes(pk);
-  const sig = secp.sign(hashBytes, pkBytes);
+  // Pass { lowS: true } explicitly. @noble/secp256k1 v2 defaults to true
+  // already, but making it explicit pins the policy: HecateVault.sol and
+  // HecateSettlementVerifier.sol both enforce EIP-2 low-s (S_UPPER_BOUND),
+  // so any future upgrade of @noble that flips the default would silently
+  // produce on-chain-rejected signatures without this option.
+  const sig = secp.sign(hashBytes, pkBytes, { lowS: true });
   return encodeSignatureHex(sig.r, sig.s, sig.recovery);
 }
 

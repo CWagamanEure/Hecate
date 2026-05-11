@@ -192,6 +192,61 @@ describe("verifyBatchReceipt — happy path", () => {
   });
 });
 
+describe("verifyBatchReceipt — V2 on-chain signature", () => {
+  it("rejects a receipt that strips engine_signature_onchain when vault_deltas is non-empty", () => {
+    const inp = baseInput();
+    // Demo has 3 matched agents -> settlement.vault_deltas is non-empty.
+    expect(inp.settlement.vault_deltas.length).toBeGreaterThan(0);
+    // Forcibly strip the field that buildBatchReceipt attached.
+    const { engine_signature_onchain: _drop, ...stripped } = inp.receipt as
+      BatchReceipt & { engine_signature_onchain?: string };
+    const r = verifyBatchReceipt({ ...inp, receipt: stripped as BatchReceipt });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.failures.map((f) => f.code)).toContain("ONCHAIN_SIGNATURE_REQUIRED");
+    }
+  });
+
+  it("rejects a tampered engine_signature_onchain", () => {
+    const inp = baseInput();
+    const sig = inp.receipt.engine_signature_onchain!;
+    // Flip one nibble inside the r component to keep it structurally valid.
+    const flipped = (sig.slice(0, 10) +
+      (sig[10] === "0" ? "1" : "0") +
+      sig.slice(11)) as `0x${string}`;
+    const tampered = { ...inp.receipt, engine_signature_onchain: flipped };
+    const r = verifyBatchReceipt({ ...inp, receipt: tampered });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      const codes = r.failures.map((f) => f.code);
+      // Either signer-mismatch (recovers to a different address) or
+      // signature-invalid (bad recovery byte path). Both are acceptable
+      // rejections for a corrupted on-chain signature.
+      expect(
+        codes.includes("ONCHAIN_SIGNER_MISMATCH") ||
+          codes.includes("ONCHAIN_SIGNATURE_INVALID")
+      ).toBe(true);
+    }
+  });
+
+  it("rejects a malformed (truncated) engine_signature_onchain", () => {
+    const inp = baseInput();
+    const tampered = {
+      ...inp.receipt,
+      engine_signature_onchain: "0xdeadbeef" as `0x${string}`
+    };
+    const r = verifyBatchReceipt({ ...inp, receipt: tampered });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      const codes = r.failures.map((f) => f.code);
+      // Truncated length -> recoverHashSigner throws, caught as INVALID.
+      // (Note: Hex65 schema validation happens at the API boundary, not
+      // inside verifyBatchReceipt, so a malformed value reaches recovery.)
+      expect(codes).toContain("ONCHAIN_SIGNATURE_INVALID");
+    }
+  });
+});
+
 describe("verifyBatchReceipt — signer", () => {
   it("wrong expectedEngineAddress -> ENGINE_SIGNER_MISMATCH", () => {
     const r = verifyBatchReceipt({ ...baseInput(), expectedEngineAddress: OTHER_ADDR });
