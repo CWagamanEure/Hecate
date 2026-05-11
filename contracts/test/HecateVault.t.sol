@@ -363,6 +363,97 @@ contract HecateVaultTest is Test {
         assertEq(vault.ethBalances(bob),   13 ether);  // 10 + 3
     }
 
+    function test_settleBatchRejectsInsolventUSDCDelta() public {
+        // alice has 1000 USDC, batch tries to debit 5000 USDC.
+        vm.startPrank(alice);
+        usdc.approve(address(vault), 1_000e6);
+        vault.depositUSDC(1_000e6);
+        vm.stopPrank();
+
+        address[] memory agents     = new address[](2);
+        int256[]  memory ethDeltas  = new int256[](2);
+        int256[]  memory usdcDeltas = new int256[](2);
+        agents[0] = alice; ethDeltas[0] = 0; usdcDeltas[0] = -int256(5_000e6);
+        agents[1] = bob;   ethDeltas[1] = 0; usdcDeltas[1] =  int256(5_000e6);
+
+        bytes32 batchId = keccak256("insolvent-usdc");
+        bytes memory sig = _signSettlement(batchId, agents, ethDeltas, usdcDeltas);
+
+        vm.expectRevert("insolvent usdc delta");
+        vault.settleBatch(batchId, agents, ethDeltas, usdcDeltas, sig);
+    }
+
+    function test_settleBatchRejectsZeroAgent() public {
+        // agents[i] == address(0) must revert.
+        vm.prank(alice);
+        vault.depositETH{value: 1 ether}();
+
+        address[] memory agents     = new address[](2);
+        int256[]  memory ethDeltas  = new int256[](2);
+        int256[]  memory usdcDeltas = new int256[](2);
+        agents[0] = alice;       ethDeltas[0] = -1 ether; usdcDeltas[0] = 0;
+        agents[1] = address(0);  ethDeltas[1] =  1 ether; usdcDeltas[1] = 0;
+
+        bytes32 batchId = keccak256("zero-agent");
+        bytes memory sig = _signSettlement(batchId, agents, ethDeltas, usdcDeltas);
+
+        vm.expectRevert("zero agent");
+        vault.settleBatch(batchId, agents, ethDeltas, usdcDeltas, sig);
+    }
+
+    function test_settleBatchRejectsTooManyAgents() public {
+        // agents.length > MAX_AGENTS must revert before any other work.
+        uint256 n = vault.MAX_AGENTS() + 1;
+        address[] memory agents     = new address[](n);
+        int256[]  memory ethDeltas  = new int256[](n);
+        int256[]  memory usdcDeltas = new int256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            agents[i] = vm.addr(i + 1000);    // any nonzero address
+            // deltas left at zero — conservation trivially satisfied,
+            // but MAX_AGENTS check fires first.
+        }
+
+        bytes memory anySig = new bytes(65);
+        vm.expectRevert("too many agents");
+        vault.settleBatch(bytes32("too-many"), agents, ethDeltas, usdcDeltas, anySig);
+    }
+
+    function test_settleBatchAppliesSequentiallyAcrossBatches() public {
+        // Two batches in sequence; second sees post-state of the first.
+        vm.prank(alice);
+        vault.depositETH{value: 10 ether}();
+        vm.startPrank(bob);
+        usdc.approve(address(vault), 20_000e6);
+        vault.depositUSDC(20_000e6);
+        vm.stopPrank();
+
+        // Batch 1: alice sells 2 ETH for 7180 USDC.
+        address[] memory a1   = new address[](2);
+        int256[]  memory e1   = new int256[](2);
+        int256[]  memory u1   = new int256[](2);
+        a1[0] = alice; e1[0] = -2 ether;       u1[0] =  int256(7_180e6);
+        a1[1] = bob;   e1[1] =  2 ether;       u1[1] = -int256(7_180e6);
+        bytes32 b1 = keccak256("seq-1");
+        vault.settleBatch(b1, a1, e1, u1, _signSettlement(b1, a1, e1, u1));
+
+        // Batch 2: alice sells 3 more ETH for 10770 USDC.
+        address[] memory a2   = new address[](2);
+        int256[]  memory e2   = new int256[](2);
+        int256[]  memory u2   = new int256[](2);
+        a2[0] = alice; e2[0] = -3 ether;       u2[0] =  int256(10_770e6);
+        a2[1] = bob;   e2[1] =  3 ether;       u2[1] = -int256(10_770e6);
+        bytes32 b2 = keccak256("seq-2");
+        vault.settleBatch(b2, a2, e2, u2, _signSettlement(b2, a2, e2, u2));
+
+        // Net: alice -5 ETH, +17950 USDC; bob +5 ETH, -17950 USDC.
+        assertEq(vault.ethBalances(alice),  5 ether);
+        assertEq(vault.usdcBalances(alice), 17_950e6);
+        assertEq(vault.ethBalances(bob),    5 ether);
+        assertEq(vault.usdcBalances(bob),   2_050e6);
+        assertTrue(vault.consumedBatchIds(b1));
+        assertTrue(vault.consumedBatchIds(b2));
+    }
+
     // ---- constructor guards -----------------------------------------------
 
     function test_constructorRejectsZeroEngine() public {

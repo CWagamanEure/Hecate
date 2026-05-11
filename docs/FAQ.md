@@ -176,10 +176,15 @@ single-process; multi-process is out of scope).
 
 **Is the v1 vault real?**
 
-No. It is an in-process ledger. Production custody is explicitly future
-work — `HecateVault.sol` exists only as a design note in
-`SOLVENCY_AND_VAULTS.md`. See
-[ROADMAP.md §3](ROADMAP.md#3-production-solvency).
+The runtime engine still settles through an in-process ledger — every
+demo today uses the mock vault. A real custody contract,
+[`contracts/HecateVault.sol`](../contracts/HecateVault.sol), is now
+committed to the repo with full Forge coverage (deposit / withdraw /
+signed `settleBatch` with conservation, replay, signature, and
+insolvency guards). It is **not** yet integrated with the engine and
+**not** yet deployed; integration is V2 of the on-chain vault project.
+See [SOLVENCY_AND_VAULTS.md](SOLVENCY_AND_VAULTS.md) for the design and
+[ROADMAP.md §3](ROADMAP.md#3-production-solvency) for the rollout plan.
 
 ---
 

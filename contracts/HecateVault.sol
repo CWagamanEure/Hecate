@@ -66,6 +66,12 @@ contract HecateVault is ReentrancyGuard {
     /// @dev Sentinel token for ETH in the Deposited/Withdrawn events.
     address private constant ETH_TOKEN = address(0);
 
+    /// @notice Upper bound on agents per `settleBatch` call.
+    /// @dev    Guards against a pathological batch that would exceed the
+    ///         block gas limit. Real Hecate batches are O(10) agents; this
+    ///         is several orders of magnitude over expected load.
+    uint256 public constant MAX_AGENTS = 1000;
+
     // ---- constructor -----------------------------------------------------
 
     constructor(address engine, address usdc) {
@@ -128,8 +134,9 @@ contract HecateVault is ReentrancyGuard {
      *
      * Reverts on:
      *   - batchId previously consumed
+     *   - empty batch / agents.length > MAX_AGENTS
      *   - array length mismatch
-     *   - empty batch
+     *   - any agents[i] == address(0)
      *   - Σ ethDeltas != 0 or Σ usdcDeltas != 0 (conservation)
      *   - signature recovery != ENGINE
      *   - any resulting agent balance < 0 (insolvent debit)
@@ -143,6 +150,7 @@ contract HecateVault is ReentrancyGuard {
     ) external {
         require(!consumedBatchIds[batchId], "batch already settled");
         require(agents.length > 0,                       "empty batch");
+        require(agents.length <= MAX_AGENTS,             "too many agents");
         require(agents.length == ethDeltas.length,       "len mismatch eth");
         require(agents.length == usdcDeltas.length,      "len mismatch usdc");
 
@@ -163,6 +171,7 @@ contract HecateVault is ReentrancyGuard {
 
         // Apply.
         for (uint256 i = 0; i < agents.length; i++) {
+            require(agents[i] != address(0), "zero agent");
             _applyEthDelta (agents[i], ethDeltas[i]);
             _applyUsdcDelta(agents[i], usdcDeltas[i]);
         }

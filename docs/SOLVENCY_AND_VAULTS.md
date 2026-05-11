@@ -76,6 +76,8 @@ There are two materially different versions of this option, and the docs must no
 
 #### 3.2.a Simple `HecateVault.sol` (public balances)
 
+> **Implementation status (2026-05):** the contract itself has now been written ([`contracts/HecateVault.sol`](../contracts/HecateVault.sol), 28 Forge tests). It is **not** integrated with the runtime engine and **not** deployed on any network. Engine integration is the V2 phase of the on-chain vault project; until then, every demo continues to use the mock prefunded vault from §3.1.
+
 **What it would be:** an ordinary on-chain contract holding deposited ETH and USDC, with deposit/withdraw functions for agents and a `settleBatch` function callable only by an attested signer. Per-agent balances and reservations are stored as plain on-chain state.
 
 **Pros:**
@@ -106,7 +108,7 @@ There are two materially different versions of this option, and the docs must no
 
 **Do not imply that a real vault preserves inventory privacy "by default."** It does not. Preserving inventory privacy on chain requires the additional confidential-accounting machinery in 3.2.b, which is out of scope for v1 and for the foreseeable v2.
 
-**Verdict:** ❌ not in v1. Design note only (`contracts/HecateVault.sol.optional.md`). If we eventually do this, the choice between 3.2.a and 3.2.b is a primary design decision and must be explicit in any subsequent paper or release notes.
+**Verdict:** ❌ not in v1 (no confidential-accounting layer is implemented). If we eventually do this, the choice between 3.2.a and 3.2.b is a primary design decision and must be explicit in any subsequent paper or release notes.
 
 ### 3.3 Allowance / Permit2
 
@@ -195,7 +197,7 @@ There are two materially different versions of this option, and the docs must no
 | Option | Settlement guarantee | Custody risk | Privacy cost | Capital efficiency | v1 fit |
 |---|---|---|---|---|---|
 | Mock prefunded vault | Strong (in-engine) | None | None | N/A | ✅ |
-| Real prefunded vault (simple, 3.2.a) | Strongest | Contract risk | High (public on-chain inventory) | Low | ❌ design note only |
+| Real prefunded vault (simple, 3.2.a) | Strongest | Contract risk | High (public on-chain inventory) | Low | ⚙ contract written (`contracts/HecateVault.sol`), **not** engine-integrated, **not** deployed |
 | Real prefunded vault (confidential, 3.2.b) | Strongest | Contract + crypto risk | Restored, but only with substantial extra machinery (ZK / MPC / confidential accounting) | Low | ❌ out of scope for v1 and foreseeable v2 |
 | Allowance / Permit2 | Weak (allowance can move) | Low | Low | High | ❌ possible v2 |
 | Per-intent on-chain locking | Strong | Low | **Very high (locks leak side/size)** | Medium | ❌ defeats thesis |
