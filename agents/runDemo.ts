@@ -202,10 +202,19 @@ export function injectDemoWalletsIntoFixtures(
   });
 }
 
+const SEPOLIA_FIXTURE_DIR = resolve(HERE, "examples", "sepolia");
+
 async function loadFixtures(opts?: { useDemoWallets?: boolean }): Promise<AgentFixture[]> {
+  // When --use-demo-wallets is set, the demo runs against an engine
+  // configured with VAULT_BACKEND=onchain. The on-chain HecateVault holds
+  // faucet-sized deposits (~0.0001 ETH and 5000 mUSDC), not the 10-ETH
+  // and 20000-USDC magnitudes the local fixtures specify. Load the
+  // pre-scaled Sepolia variants so reservations and matching clear
+  // against the real on-chain balances.
+  const dir = opts?.useDemoWallets ? SEPOLIA_FIXTURE_DIR : FIXTURE_DIR;
   const out: AgentFixture[] = [];
   for (const f of FIXTURE_FILES) {
-    const raw = await readFile(join(FIXTURE_DIR, f), "utf-8");
+    const raw = await readFile(join(dir, f), "utf-8");
     const parsed = AgentFixture.parse(JSON.parse(raw));
     out.push(parsed);
   }
@@ -384,20 +393,38 @@ export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
 
     // Deposits.
     section("Deposits");
-    for (const fx of fixtures) {
-      const addr = privateKeyToAddress(fx.private_key);
-      for (const dep of fx.deposits) {
-        await fetchJson(opts.baseUrl, "POST", "/vault/mock-deposit", {
-          agent_id: addr,
-          asset: dep.asset,
-          amount: dep.amount
-        });
+    if (opts.useDemoWallets) {
+      // In --use-demo-wallets mode the engine is expected to run with
+      // VAULT_BACKEND=onchain. Deposits live on Sepolia and were placed
+      // by `npm run vault:deposit` (V6a). Calling /vault/mock-deposit
+      // here would 400 with MOCK_DEPOSIT_DISABLED; we skip it cleanly
+      // and confirm the on-chain balances instead.
+      for (const fx of fixtures) {
+        const addr = privateKeyToAddress(fx.private_key);
+        const v = (await fetchJson(opts.baseUrl, "GET", `/vault/${addr}`)) as {
+          ok: boolean;
+          vault: { balances: { ETH: string; USDC: string } };
+        };
+        const eth = v.vault.balances.ETH;
+        const usdc = v.vault.balances.USDC;
+        ok(`on-chain vault for ${fx.name} (${addr}): ETH=${eth}, USDC=${usdc}`);
       }
-      ok(
-        `deposited ${fx.deposits
-          .map((d) => `${d.amount} ${d.asset}`)
-          .join(", ")} for ${fx.name} (${addr})`
-      );
+    } else {
+      for (const fx of fixtures) {
+        const addr = privateKeyToAddress(fx.private_key);
+        for (const dep of fx.deposits) {
+          await fetchJson(opts.baseUrl, "POST", "/vault/mock-deposit", {
+            agent_id: addr,
+            asset: dep.asset,
+            amount: dep.amount
+          });
+        }
+        ok(
+          `deposited ${fx.deposits
+            .map((d) => `${d.amount} ${d.asset}`)
+            .join(", ")} for ${fx.name} (${addr})`
+        );
+      }
     }
 
     // Submit intents.

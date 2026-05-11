@@ -1,0 +1,25 @@
+{
+  "name": "Agent A (Sepolia)",
+  "private_key": "0x0000000000000000000000000000000000000000000000000000000000000002",
+  "deposits": [{ "asset": "ETH", "amount": "0.0001" }],
+  "intent": {
+    "side": "SELL",
+    "asset_in": "ETH",
+    "asset_out": "USDC",
+    "max_base_amount": "0.0001",
+    "limit_price": "3580",
+    "allow_partial_fill": true,
+    "min_base_fill_amount": "0.00003",
+    "deadline_batches": 3,
+    "max_price_impact_bps": 10000,
+    "fallback_after_batches": null
+  },
+  "expected_outcome": {
+    "accepted": true,
+    "reject_reason": null,
+    "final_status": "FILLED",
+    "final_filled_base": "0.0001",
+    "final_balance_eth": "0",
+    "final_balance_usdc": "0.359"
+  }
+}

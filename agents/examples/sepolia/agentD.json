@@ -1,0 +1,25 @@
+{
+  "name": "Agent D (Sepolia)",
+  "private_key": "0x0000000000000000000000000000000000000000000000000000000000000005",
+  "deposits": [{ "asset": "USDC", "amount": "200" }],
+  "intent": {
+    "side": "BUY",
+    "asset_in": "USDC",
+    "asset_out": "ETH",
+    "max_base_amount": "1",
+    "limit_price": "3600",
+    "allow_partial_fill": true,
+    "min_base_fill_amount": "1",
+    "deadline_batches": 3,
+    "max_price_impact_bps": 10000,
+    "fallback_after_batches": null
+  },
+  "expected_outcome": {
+    "accepted": false,
+    "reject_reason": "INSUFFICIENT_FUNDS",
+    "final_status": null,
+    "final_filled_base": null,
+    "final_balance_eth": "0",
+    "final_balance_usdc": "200"
+  }
+}
