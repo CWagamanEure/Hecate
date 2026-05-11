@@ -435,7 +435,7 @@ export async function runDemo(opts: RunDemoOptions): Promise<RunDemoResult> {
 
     for (const [i, fx] of fixtures.entries()) {
       const addr = privateKeyToAddress(fx.private_key);
-      const intent_id = `intent_${fx.name.replace(/\s+/g, "_")}_${runId}_${i}`;
+      const intent_id = `intent_${fx.name.replace(/[^A-Za-z0-9_-]/g, "_")}_${runId}_${i}`;
       const nonce = `${runId}_${i}`;
       const payload: PrivatePayload = { ...fx.intent, nonce };
       const ciphertext: HexBytes = mockEncryptPayload(payload, enclaveKey);
