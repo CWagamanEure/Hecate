@@ -94,7 +94,7 @@ EXPECTED_MODE=EIGEN_TEE npm run eigen:attest-check -- https://<deployed-url>
 # Run every test surface. All should pass.
 npm install
 npm run typecheck
-npm test                          # expect: 691 / 691
+npm test                          # expect: 728 / 728
 cd contracts && forge test        # expect: 44 / 44
 cd ..
 bash scripts/demo-replay.sh       # expect: ALL DEMO SCENARIOS PASSED

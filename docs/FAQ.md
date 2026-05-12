@@ -259,7 +259,7 @@ as a dev signer.
 
 **What's tested?**
 
-691 vitest cases across 54 files, including 9 adversarial test files
+728 vitest cases across 60 files, including 9 adversarial test files
 (one of which is a property-based fuzz that mutates random leaves of a
 saved bundle — every mutation tested rejects). 14 explicit tamper
 scenarios in the CLI replay. 44 Forge tests across three contracts
