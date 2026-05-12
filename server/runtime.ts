@@ -17,7 +17,6 @@ import {
   type HexAddress
 } from "@shared/schemas";
 import { loadSepoliaDeployment } from "@shared/deployments/sepolia";
-import { loadDemoWallets } from "@agents/demoWallets";
 import { loadOnchainVaultState } from "./vault/onchainLoader";
 import type { ServerState, VaultBackend } from "./state";
 
@@ -78,12 +77,17 @@ export async function bootstrap(
   if (vaultBackend === "onchain") {
     const rpcUrl = resolveSepoliaRpc(env);
     const deployment = await loadSepoliaDeployment();
-    const wallets = await loadDemoWallets();
+    // Agents come from the committed deployments/sepolia.json manifest,
+    // not from .demo-wallets.json. The engine only needs public addresses
+    // to query on-chain balances; private keys live on the signer side
+    // (agents/simulator/runDemo) and never reach the engine. Critically,
+    // this lets the engine ship in a Docker image (V6d) without baking in
+    // any per-machine private state.
     const agents: HexAddress[] = [
-      wallets.A.addr as HexAddress,
-      wallets.B.addr as HexAddress,
-      wallets.C.addr as HexAddress,
-      wallets.D.addr as HexAddress
+      deployment.demo_agents.A.address as HexAddress,
+      deployment.demo_agents.B.address as HexAddress,
+      deployment.demo_agents.C.address as HexAddress,
+      deployment.demo_agents.D.address as HexAddress
     ];
     vault = await loadOnchainVaultState({
       rpcUrl,

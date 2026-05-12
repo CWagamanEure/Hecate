@@ -8,6 +8,8 @@ data/vault.json
 data/reservations.json
 data/last-bundle.json
 data/docker-bundle.json
+deployments/sepolia-deposits-*.json
+.demo-wallets.json
 *.log
 .DS_Store
 .vscode
