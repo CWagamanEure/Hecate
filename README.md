@@ -9,6 +9,10 @@ batch-crossing engine for ETH/USDC.
 > [docs/SOLVENCY_AND_VAULTS.md](docs/SOLVENCY_AND_VAULTS.md) for the full claim
 > surface.
 
+> **New to the project?** Start with [OVERVIEW.md](OVERVIEW.md) — a
+> single-page narrative writeup of what Hecate does, the architecture, what's
+> deployed, and the honest limitations.
+
 ## What Hecate is
 
 - An API-first private batch-crossing engine for autonomous-agent intents.
@@ -315,6 +319,7 @@ See [docs/DEMO.md](docs/DEMO.md) for the full tamper table.
 
 ## Documentation
 
+- [Overview](OVERVIEW.md) — single-page Eigen-facing writeup with architecture diagram
 - [Technical paper](docs/TECHNICAL_PAPER.md) — design, claims, limitations
 - [Threat model](docs/THREAT_MODEL.md) — what the TEE helps with and does not
 - [Architecture](docs/ARCHITECTURE.md) — system + module + data-flow overview
